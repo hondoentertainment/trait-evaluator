@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Trait value crosswalk — Profile Read</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,900&family=Space+Grotesk:wght@400;500;700&family=Space+Mono&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#171310;
+    --paper:#f6efe4;
+    --card:#fffdf8;
+    --plum:#5b2a86;
+    --plum-soft:#efe6f6;
+    --lime:#c3e600;
+    --coral:#ff5c49;
+    --rule:#d8cdba;
+    --muted:#7a6f60;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{-webkit-text-size-adjust:100%}
+  body{
+    font-family:'Space Grotesk',system-ui,sans-serif;
+    background:var(--paper);
+    color:var(--ink);
+    line-height:1.5;
+    min-height:100vh;
+    padding:clamp(16px,4vw,48px);
+  }
+  .wrap{max-width:960px;margin:0 auto}
+  header{margin-bottom:28px}
+  .eyebrow{
+    font-family:'Space Mono',monospace;
+    font-size:12px;letter-spacing:.18em;text-transform:uppercase;
+    color:var(--plum);margin-bottom:10px;
+  }
+  h1{
+    font-family:'Fraunces',serif;font-weight:900;
+    font-size:clamp(38px,9vw,64px);line-height:.95;
+    letter-spacing:-.02em;margin-bottom:14px;
+  }
+  h1 em{font-style:italic;color:var(--plum)}
+  .sub{font-size:15px;color:var(--muted);max-width:52ch}
+  .pager{
+    display:flex;gap:10px;align-items:center;justify-content:space-between;
+    margin:20px 0 18px;flex-wrap:wrap;
+  }
+  .pager .page-meta{
+    font-family:'Space Mono',monospace;font-size:11px;
+    letter-spacing:.14em;text-transform:uppercase;color:var(--muted);
+  }
+  .nav-btn{
+    font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:13px;
+    cursor:pointer;border:1.5px solid var(--ink);background:var(--card);
+    color:var(--ink);padding:9px 16px;border-radius:2px;text-decoration:none;
+    display:inline-block;box-shadow:3px 3px 0 var(--ink);
+    transition:transform .08s ease, box-shadow .08s ease;
+  }
+  .nav-btn:hover{transform:translate(-1px,-1px);box-shadow:4px 4px 0 var(--ink)}
+  .nav-btn.primary{background:var(--lime)}
+  .xwalk-legend{
+    display:grid;grid-template-columns:repeat(3,1fr);gap:10px;
+    margin:0 0 18px;
+  }
+  @media (max-width:560px){.xwalk-legend{grid-template-columns:1fr}}
+  .xwalk-key{
+    border:1.5px solid var(--ink);background:var(--card);padding:12px 14px;border-radius:2px;
+  }
+  .xwalk-key .k-count{
+    font-family:'Fraunces',serif;font-weight:900;font-size:28px;line-height:1;margin-bottom:4px;
+  }
+  .xwalk-key .k-band{
+    font-family:'Space Mono',monospace;font-size:11px;letter-spacing:.08em;color:var(--muted);
+  }
+  .xwalk-key .k-read{font-size:13px;margin-top:6px;color:var(--ink)}
+  .xwalk-key.pos .k-count{color:#3a7d44}
+  .xwalk-key.zero .k-count{color:var(--muted)}
+  .xwalk-key.neg .k-count{color:var(--coral)}
+  .xwalk-wrap{
+    overflow:auto;border:1.5px solid var(--ink);background:var(--card);
+    border-radius:2px;box-shadow:6px 6px 0 var(--plum);
+  }
+  .xwalk{
+    width:100%;border-collapse:collapse;min-width:720px;
+    font-size:14px;
+  }
+  .xwalk th{
+    font-family:'Space Mono',monospace;font-size:10px;letter-spacing:.12em;
+    text-transform:uppercase;text-align:left;color:var(--muted);
+    padding:12px 12px;border-bottom:1.5px solid var(--ink);
+    background:var(--paper);position:sticky;top:0;
+  }
+  .xwalk td{
+    padding:12px;border-bottom:1px solid var(--rule);
+    vertical-align:top;
+  }
+  .xwalk .c-num{
+    font-family:'Space Mono',monospace;font-size:12px;color:var(--muted);width:36px;
+  }
+  .xwalk .c-trait{
+    font-family:'Fraunces',serif;font-weight:600;font-size:16px;line-height:1.2;
+    min-width:140px;
+  }
+  .xwalk .c-score{
+    font-family:'Fraunces',serif;font-weight:900;font-size:20px;color:#fff;
+    text-align:center;width:56px;
+  }
+  .xwalk .c-score span{
+    display:inline-flex;align-items:center;justify-content:center;
+    width:44px;height:36px;
+  }
+  .xwalk .c-count{width:64px}
+  .xwalk .c-run{
+    font-family:'Space Mono',monospace;font-weight:700;font-size:13px;width:72px;
+  }
+  .xwalk .c-tags{min-width:120px}
+  .xwalk .c-signal{color:var(--ink);min-width:180px;max-width:280px}
+  .xwalk .c-upgrade{color:var(--muted);font-size:13px;min-width:160px;max-width:240px}
+  .count-val{
+    font-family:'Space Mono',monospace;font-size:11px;font-weight:700;
+    display:inline-flex;align-items:center;justify-content:center;
+    min-width:34px;padding:2px 7px;border-radius:2px;
+    border:1px solid var(--ink);
+  }
+  .cv-pos{background:var(--lime);color:var(--ink)}
+  .cv-neg{background:var(--coral);color:#fff}
+  .cv-zero{background:var(--paper);color:var(--muted)}
+  .tags{display:flex;flex-wrap:wrap;gap:6px}
+  .tag{font-family:'Space Mono',monospace;font-size:11px;padding:3px 9px;
+    border-radius:2px;border:1px solid var(--rule);color:var(--muted)}
+  .xwalk-empty{
+    border:1.5px dashed var(--rule);padding:28px;text-align:center;
+    font-family:'Space Mono',monospace;font-size:13px;color:var(--muted);
+  }
+  .xwalk-empty a{color:var(--plum)}
+  footer{margin-top:34px;font-family:'Space Mono',monospace;font-size:11px;
+    color:var(--muted);text-align:center;line-height:1.7}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="eyebrow">Profile Read · page 2 · published</div>
+    <h1>Trait value <em>crosswalk</em></h1>
+    <p class="sub">Every card mapped: score band → Hi-Lo count → running total. Same shoe, read as a grid.</p>
+  </header>
+
+  <div class="pager">
+    <a class="nav-btn" href="/">← Back to shoe</a>
+    <span class="page-meta" id="pageMeta">Page 2 of 2 · value grid</span>
+  </div>
+
+  <div class="xwalk-legend" aria-label="Hi-Lo value key">
+    <div class="xwalk-key pos">
+      <div class="k-count">+1</div>
+      <div class="k-band">Score 70–100</div>
+      <div class="k-read">High card — distinctive, revealing, green-flag signal.</div>
+    </div>
+    <div class="xwalk-key zero">
+      <div class="k-count">0</div>
+      <div class="k-band">Score 36–69</div>
+      <div class="k-read">Neutral card — fine, but not decisive either way.</div>
+    </div>
+    <div class="xwalk-key neg">
+      <div class="k-count">−1</div>
+      <div class="k-band">Score 0–35</div>
+      <div class="k-read">Low card — weak, cliché, low-info, or red flag.</div>
+    </div>
+  </div>
+
+  <div id="crosswalk">
+    <div class="xwalk-empty">Loading…</div>
+  </div>
+
+  <footer>
+    An opinionated read, not a scientific one.<br>
+    Have fun. Don't take a number too seriously.
+  </footer>
+</div>
+
+<script>
+const STORE_KEY='profileRead.crosswalk';
+const crosswalkEl=document.getElementById('crosswalk');
+const pageMeta=document.getElementById('pageMeta');
+
+function scoreColor(n){
+  if(n>=75) return '#5b2a86';
+  if(n>=50) return '#3a7d44';
+  if(n>=30) return '#c98a00';
+  return '#ff5c49';
+}
+function fmtCount(n){return n>0?'+'+n:String(n);}
+function trueCount(running, cardsDealt, shoeSize){
+  const decks = cardsDealt >= shoeSize
+    ? Math.max(shoeSize / 5, 0.5)
+    : Math.max((shoeSize - cardsDealt) / 5, 0.5);
+  return running / decks;
+}
+function escapeHtml(s){
+  return String(s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+}
+
+function renderCrosswalk(items){
+  if(!items.length){
+    crosswalkEl.innerHTML=`
+      <div class="xwalk-empty">
+        No shoe dealt yet.<br><br>
+        <a class="nav-btn primary" href="/" style="margin-top:12px">Deal a profile on page 1 →</a>
+      </div>`;
+    pageMeta.textContent='Page 2 of 2 · empty shoe';
+    return;
+  }
+
+  let running=0;
+  const rows=items.map((it,idx)=>{
+    const cv=Number(it.count)||0;
+    running+=cv;
+    const cvClass=cv>0?'cv-pos':cv<0?'cv-neg':'cv-zero';
+    const cvText=fmtCount(cv).replace('-','−');
+    const runText=fmtCount(running).replace('-','−');
+    const tags=(it.tags||[]).map(t=>`<span class="tag">${escapeHtml(String(t))}</span>`).join('');
+    return `<tr>
+      <td class="c-num">${idx+1}</td>
+      <td class="c-trait">${escapeHtml(it.trait)}</td>
+      <td class="c-score"><span style="background:${scoreColor(it.score)}">${it.score}</span></td>
+      <td class="c-count"><span class="count-val ${cvClass}">${cvText}</span></td>
+      <td class="c-run">${runText}</td>
+      <td class="c-tags"><div class="tags">${tags||'—'}</div></td>
+      <td class="c-signal">${escapeHtml(it.signal)||'—'}</td>
+      <td class="c-upgrade">${escapeHtml(it.upgrade)||'—'}</td>
+    </tr>`;
+  }).join('');
+
+  const finalRun=fmtCount(running).replace('-','−');
+  const tc=trueCount(running,items.length,items.length);
+  const tcNum=(tc>0?'+':'')+tc.toFixed(1);
+  pageMeta.textContent=`Page 2 of 2 · ${items.length} cards · TC ${tcNum}`;
+
+  crosswalkEl.innerHTML=`
+    <div class="xwalk-wrap">
+      <table class="xwalk">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Trait</th>
+            <th>Score</th>
+            <th>Count</th>
+            <th>Running</th>
+            <th>Tags</th>
+            <th>Signal</th>
+            <th>Upgrade</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+        <tfoot>
+          <tr>
+            <td colspan="3" style="padding:14px 12px;font-family:'Space Mono',monospace;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)">Shoe total</td>
+            <td style="padding:14px 12px"></td>
+            <td class="c-run" style="padding:14px 12px;font-size:15px">${finalRun}</td>
+            <td colspan="3" style="padding:14px 12px;font-family:'Space Mono',monospace;font-size:12px;color:var(--muted)">True count ${tcNum} · ${items.length} cards</td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>`;
+}
+
+try{
+  const raw=sessionStorage.getItem(STORE_KEY);
+  const items=raw?JSON.parse(raw):[];
+  renderCrosswalk(Array.isArray(items)?items:[]);
+}catch{
+  renderCrosswalk([]);
+}
+</script>
+</body>
+</html>

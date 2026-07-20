@@ -203,8 +203,6 @@
     outline:2px dashed var(--plum);outline-offset:4px;
     background:#fff8ef;
   }
-  .page{display:none}
-  .page.active{display:block}
   .pager{
     display:flex;gap:10px;align-items:center;justify-content:space-between;
     margin:20px 0 8px;flex-wrap:wrap;
@@ -213,149 +211,49 @@
     font-family:'Space Mono',monospace;font-size:11px;
     letter-spacing:.14em;text-transform:uppercase;color:var(--muted);
   }
-  .pager .nav-btn{
+  .pager .nav-btn, a.nav-btn{
     background:var(--card);padding:9px 16px;font-size:13px;
+    text-decoration:none;display:inline-block;
   }
-  .pager .nav-btn.primary{background:var(--lime)}
-  .pager .nav-btn:disabled{opacity:.35;cursor:not-allowed;transform:none;box-shadow:3px 3px 0 var(--ink)}
-  .xwalk-legend{
-    display:grid;grid-template-columns:repeat(3,1fr);gap:10px;
-    margin:0 0 18px;
-  }
-  @media (max-width:560px){.xwalk-legend{grid-template-columns:1fr}}
-  .xwalk-key{
-    border:1.5px solid var(--ink);background:var(--card);padding:12px 14px;border-radius:2px;
-  }
-  .xwalk-key .k-count{
-    font-family:'Fraunces',serif;font-weight:900;font-size:28px;line-height:1;margin-bottom:4px;
-  }
-  .xwalk-key .k-band{
-    font-family:'Space Mono',monospace;font-size:11px;letter-spacing:.08em;color:var(--muted);
-  }
-  .xwalk-key .k-read{font-size:13px;margin-top:6px;color:var(--ink)}
-  .xwalk-key.pos .k-count{color:#3a7d44}
-  .xwalk-key.zero .k-count{color:var(--muted)}
-  .xwalk-key.neg .k-count{color:var(--coral)}
-  .xwalk-wrap{
-    overflow:auto;border:1.5px solid var(--ink);background:var(--card);
-    border-radius:2px;box-shadow:6px 6px 0 var(--plum);
-  }
-  .xwalk{
-    width:100%;border-collapse:collapse;min-width:720px;
-    font-size:14px;
-  }
-  .xwalk th{
-    font-family:'Space Mono',monospace;font-size:10px;letter-spacing:.12em;
-    text-transform:uppercase;text-align:left;color:var(--muted);
-    padding:12px 12px;border-bottom:1.5px solid var(--ink);
-    background:var(--paper);position:sticky;top:0;
-  }
-  .xwalk td{
-    padding:12px;border-bottom:1px solid var(--rule);
-    vertical-align:top;
-  }
-  .xwalk tr:last-child td{border-bottom:none}
-  .xwalk .c-num{
-    font-family:'Space Mono',monospace;font-size:12px;color:var(--muted);width:36px;
-  }
-  .xwalk .c-trait{
-    font-family:'Fraunces',serif;font-weight:600;font-size:16px;line-height:1.2;
-    min-width:140px;
-  }
-  .xwalk .c-score{
-    font-family:'Fraunces',serif;font-weight:900;font-size:20px;color:#fff;
-    text-align:center;width:56px;
-  }
-  .xwalk .c-score span{
-    display:inline-flex;align-items:center;justify-content:center;
-    width:44px;height:36px;
-  }
-  .xwalk .c-count{width:64px}
-  .xwalk .c-run{
-    font-family:'Space Mono',monospace;font-weight:700;font-size:13px;width:72px;
-  }
-  .xwalk .c-tags{min-width:120px}
-  .xwalk .c-signal{color:var(--ink);min-width:180px;max-width:280px}
-  .xwalk .c-upgrade{color:var(--muted);font-size:13px;min-width:160px;max-width:240px}
-  .xwalk-empty{
-    border:1.5px dashed var(--rule);padding:28px;text-align:center;
-    font-family:'Space Mono',monospace;font-size:13px;color:var(--muted);
-  }
+  .pager .nav-btn.primary, a.nav-btn.primary{background:var(--lime)}
 </style>
 </head>
 <body>
 <div class="wrap">
-  <section class="page active" id="page1">
-    <header>
-      <div class="eyebrow">Profile Read · page 1 · the shoe</div>
-      <h1>What is that trait <em>actually</em> telling us?</h1>
-      <p class="sub">Paste profile text <em>or</em> drop a screenshot. Each trait is a card from the shoe — +1 / 0 / −1 — and we keep a blackjack-style running count to HIT, STAND, or BUST.</p>
-    </header>
+  <header>
+    <div class="eyebrow">Profile Read · page 1 · the shoe</div>
+    <h1>What is that trait <em>actually</em> telling us?</h1>
+    <p class="sub">Paste profile text <em>or</em> drop a screenshot. Each trait is a card from the shoe — +1 / 0 / −1 — and we keep a blackjack-style running count to HIT, STAND, or BUST.</p>
+  </header>
 
-    <div class="composer" id="composer">
-      <label for="input">Profile text <span style="font-weight:400;letter-spacing:.08em">· or screenshot</span></label>
-      <textarea id="input" placeholder="Loves hiking, 6'2&quot;, entrepreneur, fluent in sarcasm, dog mom, still figuring it out..."></textarea>
-      <div class="uploadzone">
-        <label class="upload-btn" for="file">⤒ Upload a screenshot</label>
-        <input type="file" id="file" accept="image/*" capture="environment" style="display:none">
-        <span class="hint" style="flex:1;font-size:12px">Drop an image here, or paste with ⌘/Ctrl+V. Text in the shot gets extracted.</span>
-      </div>
-      <div class="thumb" id="thumb">
-        <img id="thumbImg" alt="">
-        <span class="fname" id="thumbName"></span>
-        <button class="drop" id="thumbDrop" title="Remove">✕</button>
-      </div>
-      <div class="examples" id="examples"></div>
-      <div class="row">
-        <span class="hint">One trait per line, or comma-separated — I'll split them.</span>
-        <button id="go">Read it →</button>
-      </div>
+  <div class="composer" id="composer">
+    <label for="input">Profile text <span style="font-weight:400;letter-spacing:.08em">· or screenshot</span></label>
+    <textarea id="input" placeholder="Loves hiking, 6'2&quot;, entrepreneur, fluent in sarcasm, dog mom, still figuring it out..."></textarea>
+    <div class="uploadzone">
+      <label class="upload-btn" for="file">⤒ Upload a screenshot</label>
+      <input type="file" id="file" accept="image/*" capture="environment" style="display:none">
+      <span class="hint" style="flex:1;font-size:12px">Drop an image here, or paste with ⌘/Ctrl+V. Text in the shot gets extracted.</span>
     </div>
-
-    <div class="status" id="status">Reading between the lines…</div>
-    <div class="err" id="err" style="display:none"></div>
-    <div class="results" id="results"></div>
-
-    <div class="pager" id="pager1" style="display:none">
-      <span class="page-meta">Page 1 of 2 · dealt cards</span>
-      <button type="button" class="nav-btn primary" id="toPage2">Value crosswalk →</button>
+    <div class="thumb" id="thumb">
+      <img id="thumbImg" alt="">
+      <span class="fname" id="thumbName"></span>
+      <button class="drop" id="thumbDrop" title="Remove">✕</button>
     </div>
-  </section>
-
-  <section class="page" id="page2">
-    <header>
-      <div class="eyebrow">Profile Read · page 2 · crosswalk</div>
-      <h1>Trait value <em>crosswalk</em></h1>
-      <p class="sub">Every card mapped: score band → Hi-Lo count → running total. Same shoe, read as a grid.</p>
-    </header>
-
-    <div class="pager">
-      <button type="button" class="nav-btn" id="toPage1">← Back to shoe</button>
-      <span class="page-meta">Page 2 of 2 · value grid</span>
+    <div class="examples" id="examples"></div>
+    <div class="row">
+      <span class="hint">One trait per line, or comma-separated — I'll split them.</span>
+      <button id="go">Read it →</button>
     </div>
+  </div>
 
-    <div class="xwalk-legend" aria-label="Hi-Lo value key">
-      <div class="xwalk-key pos">
-        <div class="k-count">+1</div>
-        <div class="k-band">Score 70–100</div>
-        <div class="k-read">High card — distinctive, revealing, green-flag signal.</div>
-      </div>
-      <div class="xwalk-key zero">
-        <div class="k-count">0</div>
-        <div class="k-band">Score 36–69</div>
-        <div class="k-read">Neutral card — fine, but not decisive either way.</div>
-      </div>
-      <div class="xwalk-key neg">
-        <div class="k-count">−1</div>
-        <div class="k-band">Score 0–35</div>
-        <div class="k-read">Low card — weak, cliché, low-info, or red flag.</div>
-      </div>
-    </div>
+  <div class="status" id="status">Reading between the lines…</div>
+  <div class="err" id="err" style="display:none"></div>
+  <div class="results" id="results"></div>
 
-    <div id="crosswalk">
-      <div class="xwalk-empty">Run a profile on page 1 to fill this grid.</div>
-    </div>
-  </section>
+  <div class="pager" id="pager1" style="display:none">
+    <span class="page-meta">Page 1 of 2 · dealt cards</span>
+    <a class="nav-btn primary" id="toPage2" href="/crosswalk">Value crosswalk →</a>
+  </div>
 
   <footer>
     An opinionated read, not a scientific one.<br>
@@ -370,14 +268,8 @@ const results=document.getElementById('results');
 const statusEl=document.getElementById('status');
 const errEl=document.getElementById('err');
 const goBtn=document.getElementById('go');
-const crosswalkEl=document.getElementById('crosswalk');
-const page1=document.getElementById('page1');
-const page2=document.getElementById('page2');
 const pager1=document.getElementById('pager1');
-const toPage2=document.getElementById('toPage2');
-const toPage1=document.getElementById('toPage1');
-
-let lastItems=[];
+const STORE_KEY='profileRead.crosswalk';
 
 const chips=document.getElementById('examples');
 const fileInput=document.getElementById('file');
@@ -386,13 +278,9 @@ const thumbImg=document.getElementById('thumbImg');
 const thumbName=document.getElementById('thumbName');
 const thumbDrop=document.getElementById('thumbDrop');
 
-function showPage(n){
-  page1.classList.toggle('active', n===1);
-  page2.classList.toggle('active', n===2);
-  window.scrollTo({top:0,behavior:'smooth'});
+function saveCrosswalk(items){
+  try{sessionStorage.setItem(STORE_KEY, JSON.stringify(items));}catch{}
 }
-toPage2.addEventListener('click',()=>showPage(2));
-toPage1.addEventListener('click',()=>showPage(1));
 
 let imageData=null;   // base64 (no prefix)
 let imageMime=null;
@@ -473,7 +361,6 @@ async function evaluate(){
   errEl.style.display='none';
   results.innerHTML='';
   pager1.style.display='none';
-  showPage(1);
   if(!raw && !imageData){
     errEl.textContent='Add some profile text or upload a screenshot first.';
     errEl.style.display='block';return;
@@ -537,9 +424,8 @@ Be honest, specific, a little playful, never mean. If the image has no readable 
     if(start!==-1&&end!==-1) text=text.slice(start,end+1);
     const parsed=JSON.parse(text).map(normalizeItem).filter(it=>it.trait);
     if(!parsed.length){throw new Error('no traits');}
-    lastItems=parsed;
+    saveCrosswalk(parsed);
     render(parsed);
-    renderCrosswalk(parsed);
     pager1.style.display='flex';
   }catch(e){
     const detail=(e&&e.message)||'';
@@ -734,66 +620,8 @@ function renderTally(running,n){
   next.className='pager';
   next.innerHTML=`
     <span class="page-meta">Shoe closed · ${n} cards</span>
-    <button type="button" class="nav-btn primary" id="toPage2Inline">See value crosswalk →</button>`;
+    <a class="nav-btn primary" href="/crosswalk">See value crosswalk →</a>`;
   results.appendChild(next);
-  next.querySelector('#toPage2Inline').onclick=()=>showPage(2);
-}
-
-function renderCrosswalk(items){
-  if(!items.length){
-    crosswalkEl.innerHTML='<div class="xwalk-empty">Run a profile on page 1 to fill this grid.</div>';
-    return;
-  }
-  let running=0;
-  const rows=items.map((it,idx)=>{
-    const cv=it.count;
-    running+=cv;
-    const cvClass=cv>0?'cv-pos':cv<0?'cv-neg':'cv-zero';
-    const cvText=fmtCount(cv).replace('-','−');
-    const runText=fmtCount(running).replace('-','−');
-    const tags=(it.tags||[]).map(t=>`<span class="tag">${escapeHtml(String(t))}</span>`).join('');
-    return `<tr>
-      <td class="c-num">${idx+1}</td>
-      <td class="c-trait">${escapeHtml(it.trait)}</td>
-      <td class="c-score"><span style="background:${scoreColor(it.score)}">${it.score}</span></td>
-      <td class="c-count"><span class="count-val ${cvClass}">${cvText}</span></td>
-      <td class="c-run">${runText}</td>
-      <td class="c-tags"><div class="tags">${tags||'—'}</div></td>
-      <td class="c-signal">${escapeHtml(it.signal)||'—'}</td>
-      <td class="c-upgrade">${escapeHtml(it.upgrade)||'—'}</td>
-    </tr>`;
-  }).join('');
-
-  const finalRun=fmtCount(running).replace('-','−');
-  const tc=trueCount(running,items.length,items.length);
-  const tcNum=(tc>0?'+':'')+tc.toFixed(1);
-
-  crosswalkEl.innerHTML=`
-    <div class="xwalk-wrap">
-      <table class="xwalk">
-        <thead>
-          <tr>
-            <th>#</th>
-            <th>Trait</th>
-            <th>Score</th>
-            <th>Count</th>
-            <th>Running</th>
-            <th>Tags</th>
-            <th>Signal</th>
-            <th>Upgrade</th>
-          </tr>
-        </thead>
-        <tbody>${rows}</tbody>
-        <tfoot>
-          <tr>
-            <td colspan="3" style="padding:14px 12px;font-family:'Space Mono',monospace;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)">Shoe total</td>
-            <td style="padding:14px 12px"></td>
-            <td class="c-run" style="padding:14px 12px;font-size:15px">${finalRun}</td>
-            <td colspan="3" style="padding:14px 12px;font-family:'Space Mono',monospace;font-size:12px;color:var(--muted)">True count ${tcNum} · ${items.length} cards</td>
-          </tr>
-        </tfoot>
-      </table>
-    </div>`;
 }
 
 function escapeHtml(s){return String(s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}

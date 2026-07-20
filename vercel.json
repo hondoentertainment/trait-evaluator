@@ -1,7 +1,10 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "cleanUrls": true,
-  "rewrites": [{ "source": "/", "destination": "/index.html" }],
+  "rewrites": [
+    { "source": "/", "destination": "/index.html" },
+    { "source": "/crosswalk", "destination": "/crosswalk.html" }
+  ],
   "functions": {
     "api/evaluate.js": {
       "maxDuration": 60,
