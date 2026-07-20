@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <rect width="1200" height="630" fill="#f6efe4"/>
+  <rect x="0" y="0" width="1200" height="12" fill="#5b2a86"/>
+  <text x="72" y="140" font-family="Georgia, serif" font-size="36" fill="#5b2a86" letter-spacing="6">PROFILE READ</text>
+  <text x="72" y="250" font-family="Georgia, serif" font-size="96" font-weight="700" fill="#171310">Deal the shoe.</text>
+  <text x="72" y="340" font-family="Georgia, serif" font-size="96" font-weight="700" fill="#5b2a86">Read the count.</text>
+  <rect x="72" y="420" width="220" height="90" fill="#171310"/>
+  <text x="92" y="480" font-family="Georgia, serif" font-size="48" font-weight="700" fill="#c3e600">HIT</text>
+  <rect x="310" y="420" width="160" height="90" fill="#fffdf8" stroke="#171310" stroke-width="3"/>
+  <text x="330" y="480" font-family="monospace" font-size="36" fill="#171310">+2</text>
+  <text x="72" y="580" font-family="monospace" font-size="22" fill="#7a6f60">Hi-Lo trait counts · dating profiles</text>
+</svg>

@@ -1,14 +1,22 @@
-# Trait Evaluator
+# Trait Evaluator (Profile Read)
 
-Reads a dating profile — typed or from a screenshot — scores each stated trait
-for signal strength, keeps a blackjack-style running ±1 count, and delivers a
-final **HIT / STAND / BUST** verdict. Powered by Grok via Vercel AI Gateway.
+Reads a dating profile — typed or from a cropped screenshot — scores each stated
+trait for signal strength, keeps a blackjack-style Hi-Lo running count, and
+delivers a final **HIT / STAND / BUST** verdict. Page 2 is a shareable value
+crosswalk. Powered by Grok via Vercel AI Gateway.
+
+## Pages
+
+- `/` — home showcase + shoe dealer (crop → OCR extract → edit → animated deal)
+- `/crosswalk` — value grid (`?id=` for saved deals, `?d=` for share payloads)
 
 ## Architecture
 
-- `public/index.html` — the whole frontend (no build step).
-- `api/evaluate.js` — a Vercel serverless function that proxies to Grok. Auth
-  stays server-side (AI Gateway OIDC / `AI_GATEWAY_API_KEY` / `XAI_API_KEY`).
+- `public/index.html` + `public/js/app.js` — page 1
+- `public/crosswalk.html` + `public/js/crosswalk-page.js` — page 2
+- `public/js/store.js` — localStorage persistence + share encoding
+- `public/js/hilo.js` — Hi-Lo bands, feedback tuning, verdicts
+- `api/evaluate.js` — Grok proxy with rate limits (`extract` / `score` modes)
 
 ## Deploy
 
@@ -17,20 +25,26 @@ git push
 npx vercel deploy --prod --yes
 ```
 
-Production on Vercel uses project OIDC for AI Gateway automatically. For a
-direct xAI key instead, set `XAI_API_KEY` in the Vercel project env vars.
+### Custom domain
+
+Vercel dashboard → Project → Settings → Domains → add your domain and follow DNS.
+
+### Auth
+
+Production uses project OIDC for AI Gateway. Optionally set `AI_GATEWAY_API_KEY`
+or `XAI_API_KEY` in project env vars.
 
 ## Local dev
 
 ```bash
 vercel link
-vercel env pull .env.local   # provisions VERCEL_OIDC_TOKEN
-vercel dev                   # serves frontend + /api/evaluate
+vercel env pull .env.local
+vercel dev
 ```
 
 ## Notes
 
-- Uploaded images are downscaled to 1400px and re-encoded as JPEG in the browser
-  before upload, to keep request size down.
-- The serverless body limit is raised to 8 MB in `api/evaluate.js` to fit base64
-  images.
+- Deals persist in the browser (`localStorage`) and can be shared via URL.
+- Thumbs on a trait nudge personal Hi-Lo bands (score thresholds).
+- API: ~40 req/hour/IP (best-effort) + client-side 30/hour guard.
+- Screenshots are cropped in-browser, downscaled to 1400px JPEG before upload.

@@ -5,6 +5,12 @@
     { "source": "/", "destination": "/index.html" },
     { "source": "/crosswalk", "destination": "/crosswalk.html" }
   ],
+  "headers": [
+    {
+      "source": "/og.svg",
+      "headers": [{ "key": "Cache-Control", "value": "public, max-age=86400" }]
+    }
+  ],
   "functions": {
     "api/evaluate.js": {
       "maxDuration": 60,
