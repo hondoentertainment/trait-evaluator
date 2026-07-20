@@ -3,8 +3,11 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Dating profile trait evaluator with blackjack-style hit/stand verdict, powered by Claude.",
+  "description": "Dating profile trait evaluator with blackjack-style hit/stand verdict, powered by Grok.",
   "engines": {
     "node": ">=18"
+  },
+  "dependencies": {
+    "@vercel/oidc": "^3.8.0"
   }
 }

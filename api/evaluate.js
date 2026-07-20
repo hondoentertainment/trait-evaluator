@@ -1,7 +1,10 @@
+import { getVercelOidcToken } from "@vercel/oidc";
+
 export const config = {
   api: {
     bodyParser: { sizeLimit: "8mb" },
   },
+  maxDuration: 60,
 };
 
 // Proxies to Grok via Vercel AI Gateway (OIDC) or a direct xAI key.
@@ -12,29 +15,36 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: { message: "Method not allowed" } });
   }
 
-  const apiKey =
+  let apiKey =
     process.env.AI_GATEWAY_API_KEY ||
+    process.env.XAI_API_KEY ||
     process.env.VERCEL_OIDC_TOKEN ||
-    process.env.XAI_API_KEY;
+    null;
+
+  if (!apiKey) {
+    try {
+      apiKey = await getVercelOidcToken();
+    } catch {
+      apiKey = null;
+    }
+  }
 
   if (!apiKey) {
     return res.status(500).json({
       error: {
         message:
-          "Missing AI auth. Run `vercel env pull .env.local` or set XAI_API_KEY.",
+          "Missing AI auth. Set AI_GATEWAY_API_KEY / XAI_API_KEY, or deploy on Vercel with AI Gateway OIDC.",
       },
     });
   }
 
-  const useGateway = !!(
-    process.env.AI_GATEWAY_API_KEY || process.env.VERCEL_OIDC_TOKEN
-  );
-  const baseUrl = useGateway
-    ? "https://ai-gateway.vercel.sh/v1"
-    : "https://api.x.ai/v1";
-  const model = useGateway
-    ? "xai/grok-4.1-fast-non-reasoning"
-    : "grok-4-1-fast-non-reasoning";
+  const useDirectXai = !!process.env.XAI_API_KEY && !process.env.AI_GATEWAY_API_KEY;
+  const baseUrl = useDirectXai
+    ? "https://api.x.ai/v1"
+    : "https://ai-gateway.vercel.sh/v1";
+  const model = useDirectXai
+    ? "grok-4-1-fast-non-reasoning"
+    : "xai/grok-4.1-fast-non-reasoning";
 
   try {
     const { content } = req.body || {};
@@ -45,6 +55,10 @@ export default async function handler(req, res) {
     }
 
     const openAiContent = toOpenAiContent(content);
+    const hasImage = Array.isArray(openAiContent)
+      ? openAiContent.some((b) => b?.type === "image_url")
+      : false;
+
     const upstream = await fetch(`${baseUrl}/chat/completions`, {
       method: "POST",
       headers: {
@@ -53,7 +67,8 @@ export default async function handler(req, res) {
       },
       body: JSON.stringify({
         model,
-        max_tokens: 1500,
+        max_tokens: hasImage ? 2500 : 1500,
+        temperature: 0.4,
         messages: [{ role: "user", content: openAiContent }],
       }),
     });
