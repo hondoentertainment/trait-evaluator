@@ -1,40 +1,31 @@
-# Trait Evaluator (Profile Read)
+# Profile Read
 
-Reads a dating profile — typed or from a cropped screenshot — scores each stated
-trait for signal strength, keeps a blackjack-style Hi-Lo running count, and
-delivers a final **HIT / STAND / BUST** verdict. Page 2 is a shareable value
-crosswalk. Powered by Grok via Vercel AI Gateway.
+Deal dating-profile traits like a blackjack shoe — Hi-Lo running count, true
+count, **HIT / STAND / BUST** — then open a shareable value crosswalk.
+
+Powered by Grok via Vercel AI Gateway. Deals sync through a private GitHub data
+repo (`DATA_REPO` + `GITHUB_TOKEN`).
 
 ## Pages
 
-- `/` — home showcase + shoe dealer (crop → OCR extract → edit → animated deal)
-- `/crosswalk` — value grid (`?id=` for saved deals, `?d=` for share payloads)
+| Path | Purpose |
+|------|---------|
+| `/` | Home showcase + shoe dealer (crop → OCR → edit → animated deal) |
+| `/crosswalk` | Value grid (`?id=`, `?d=`, `?sid=`) |
+| `/compare` | Head-to-head two shoes |
+| `/s/:id` | Short server share link |
 
-## Architecture
+## Features
 
-- `public/index.html` + `public/js/app.js` — page 1
-- `public/crosswalk.html` + `public/js/crosswalk-page.js` — page 2
-- `public/js/store.js` — localStorage persistence + share encoding
-- `public/js/hilo.js` — Hi-Lo bands, feedback tuning, verdicts
-- `api/evaluate.js` — Grok proxy with rate limits (`extract` / `score` modes)
+- **Accounts** — recovery code syncs shoes across devices; optional Clerk when `CLERK_PUBLISHABLE_KEY` is set
+- **Short shares** — `/s/abc123` via GitHub-backed store
+- **OCR loop** — crop, confidence chips, re-OCR, edit before deal
+- **Photo vibe** — optional second pass on lifestyle/face cues
+- **Compare** — Δ running / true count between two saved shoes
+- **PWA** — installable, offline shell, share-target entry
+- **Telemetry** — anonymous events tune global Hi-Lo band suggestions
 
-## Deploy
-
-```bash
-git push
-npx vercel deploy --prod --yes
-```
-
-### Custom domain
-
-Vercel dashboard → Project → Settings → Domains → add your domain and follow DNS.
-
-### Auth
-
-Production uses project OIDC for AI Gateway. Optionally set `AI_GATEWAY_API_KEY`
-or `XAI_API_KEY` in project env vars.
-
-## Local dev
+## Setup
 
 ```bash
 vercel link
@@ -42,9 +33,20 @@ vercel env pull .env.local
 vercel dev
 ```
 
-## Notes
+Required env (already wired for this project):
 
-- Deals persist in the browser (`localStorage`) and can be shared via URL.
-- Thumbs on a trait nudge personal Hi-Lo bands (score thresholds).
-- API: ~40 req/hour/IP (best-effort) + client-side 30/hour guard.
-- Screenshots are cropped in-browser, downscaled to 1400px JPEG before upload.
+- `GITHUB_TOKEN` — write access to the data repo
+- `DATA_REPO` — e.g. `hondoentertainment/profileread-data`
+- AI Gateway OIDC (automatic on Vercel) or `AI_GATEWAY_API_KEY` / `XAI_API_KEY`
+
+Optional:
+
+- `CLERK_PUBLISHABLE_KEY` — enables Sign in on the home account bar
+- Custom domain — Vercel → Project → Settings → Domains
+
+## Deploy
+
+```bash
+git push
+npx vercel deploy --prod --yes
+```

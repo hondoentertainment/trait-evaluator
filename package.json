@@ -3,11 +3,13 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Dating profile trait evaluator with blackjack-style hit/stand verdict, powered by Grok.",
+  "description": "Profile Read — dating profile Hi-Lo shoe counter with sync, short shares, PWA, and Grok.",
   "engines": {
     "node": ">=18"
   },
   "dependencies": {
-    "@vercel/oidc": "^3.8.0"
+    "@vercel/blob": "^2.6.1",
+    "@vercel/oidc": "^3.8.0",
+    "nanoid": "^6.0.0"
   }
 }

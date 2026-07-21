@@ -3,18 +3,30 @@
   "cleanUrls": true,
   "rewrites": [
     { "source": "/", "destination": "/index.html" },
-    { "source": "/crosswalk", "destination": "/crosswalk.html" }
+    { "source": "/crosswalk", "destination": "/crosswalk.html" },
+    { "source": "/compare", "destination": "/compare.html" },
+    { "source": "/s/:id", "destination": "/s.html" }
   ],
   "headers": [
     {
-      "source": "/og.svg",
+      "source": "/og.png",
       "headers": [{ "key": "Cache-Control", "value": "public, max-age=86400" }]
+    },
+    {
+      "source": "/sw.js",
+      "headers": [{ "key": "Cache-Control", "value": "public, max-age=0, must-revalidate" }]
+    },
+    {
+      "source": "/(.*)",
+      "headers": [
+        { "key": "X-Content-Type-Options", "value": "nosniff" }
+      ]
     }
   ],
   "functions": {
-    "api/evaluate.js": {
-      "maxDuration": 60,
-      "memory": 1024
-    }
+    "api/evaluate.js": { "maxDuration": 60 },
+    "api/share.js": { "maxDuration": 30 },
+    "api/sync.js": { "maxDuration": 30 },
+    "api/telemetry.js": { "maxDuration": 30 }
   }
 }

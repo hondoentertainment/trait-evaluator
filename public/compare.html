@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Compare shoes · Profile Read</title>
+<meta name="description" content="Compare two Profile Read shoes head-to-head: running count, true count, and verdict delta.">
+<meta property="og:title" content="Profile Read — compare shoes">
+<meta property="og:image" content="/og.png">
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="theme-color" content="#5b2a86">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,900&family=Space+Grotesk:wght@400;700&family=Space+Mono&display=swap" rel="stylesheet">
+<style>
+  :root{--ink:#171310;--paper:#f6efe4;--card:#fffdf8;--plum:#5b2a86;--lime:#c3e600;--coral:#ff5c49;--muted:#7a6f60;--rule:#d8cdba}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Space Grotesk',system-ui,sans-serif;background:var(--paper);color:var(--ink);padding:clamp(16px,4vw,40px);line-height:1.5}
+  .wrap{max-width:960px;margin:0 auto}
+  .eyebrow{font-family:'Space Mono',monospace;font-size:12px;letter-spacing:.18em;text-transform:uppercase;color:var(--plum);margin-bottom:10px}
+  h1{font-family:'Fraunces',serif;font-weight:900;font-size:clamp(34px,7vw,52px);line-height:.95;margin-bottom:12px}
+  h1 em{font-style:italic;color:var(--plum)}
+  .sub{color:var(--muted);max-width:50ch;margin-bottom:20px}
+  .nav{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:22px}
+  .nav a{border:1.5px solid var(--ink);background:var(--card);padding:8px 14px;text-decoration:none;color:var(--ink);font-weight:700;font-size:13px;box-shadow:3px 3px 0 var(--ink)}
+  .pick{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:18px}
+  @media(max-width:700px){.pick{grid-template-columns:1fr}}
+  label{font-family:'Space Mono',monospace;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);display:block;margin-bottom:6px}
+  select{width:100%;padding:12px;border:1.5px solid var(--ink);background:var(--card);font:inherit}
+  button{border:1.5px solid var(--ink);background:var(--lime);padding:12px 18px;font-weight:700;cursor:pointer;box-shadow:3px 3px 0 var(--ink)}
+  .board{display:grid;grid-template-columns:1fr auto 1fr;gap:12px;align-items:stretch;margin-top:18px}
+  @media(max-width:700px){.board{grid-template-columns:1fr}}
+  .shoe-card{border:1.5px solid var(--ink);background:var(--card);padding:16px}
+  .shoe-card h2{font-family:'Fraunces',serif;font-size:22px;margin-bottom:8px}
+  .big{font-family:'Fraunces',serif;font-weight:900;font-size:48px;line-height:1}
+  .hot{color:#3a7d44}.cold{color:var(--coral)}.mid{color:var(--muted)}
+  .vs{font-family:'Fraunces',serif;font-weight:900;font-size:28px;display:grid;place-items:center}
+  .delta{margin-top:18px;border:1.5px solid var(--ink);background:var(--ink);color:var(--card);padding:18px}
+  .delta .word{font-family:'Fraunces',serif;font-weight:900;font-size:40px;color:var(--lime)}
+  .meta{font-family:'Space Mono',monospace;font-size:11px;color:#b6ab99;margin-top:6px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="eyebrow">Profile Read · compare</div>
+  <h1>Head-to-head <em>shoes</em></h1>
+  <p class="sub">Pick two saved deals. We compare running count, true count, and the final call.</p>
+  <div class="nav">
+    <a href="/">← Shoe</a>
+    <a href="/crosswalk">Crosswalk</a>
+  </div>
+  <div class="pick">
+    <div>
+      <label for="a">Shoe A</label>
+      <select id="a"></select>
+    </div>
+    <div>
+      <label for="b">Shoe B</label>
+      <select id="b"></select>
+    </div>
+  </div>
+  <button type="button" id="go">Compare →</button>
+  <div id="out"></div>
+</div>
+<script type="module" src="/js/compare-page.js"></script>
+</body>
+</html>

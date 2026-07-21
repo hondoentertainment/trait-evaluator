@@ -15,6 +15,8 @@ import {
   normalizeItem,
   applyFeedback,
 } from "./hilo.js";
+import { createServerShare, loadServerShare } from "./auth.js";
+import { track } from "./telemetry.js";
 
 const DEMO = [
   {
@@ -61,14 +63,23 @@ function escapeHtml(s) {
   );
 }
 
-function resolveDeal() {
+async function resolveDeal() {
   const params = new URLSearchParams(location.search);
+  const sid = params.get("sid") || params.get("s");
+  if (sid) {
+    const server = await loadServerShare(sid);
+    if (server?.items?.length) {
+      server.items = server.items.map((it) => normalizeItem(it));
+      const saved = saveDeal(server);
+      history.replaceState({}, "", `/crosswalk?id=${encodeURIComponent(saved.id)}`);
+      return saved;
+    }
+  }
   const d = params.get("d");
   if (d) {
     const shared = fromShareParam(d);
     if (shared?.items?.length) {
       shared.items = shared.items.map((it) => normalizeItem(it));
-      // Persist shared deal so refresh/history works
       const saved = saveDeal({
         id: uid(),
         createdAt: Date.now(),
@@ -219,21 +230,34 @@ function renderCrosswalk(deal) {
 
   if (shareBtn) {
     shareBtn.onclick = async () => {
-      const url = shareUrl(deal);
+      shareBtn.textContent = "Creating link…";
       try {
+        const server = await createServerShare(deal);
+        const url = server.url.startsWith("http")
+          ? server.url
+          : location.origin + server.url;
         await navigator.clipboard.writeText(url);
-        shareBtn.textContent = "Link copied";
-        setTimeout(() => (shareBtn.textContent = "Copy share link"), 1600);
+        shareBtn.textContent = "Short link copied";
+        track("share_server");
       } catch {
-        prompt("Copy share link:", url);
+        const url = shareUrl(deal);
+        try {
+          await navigator.clipboard.writeText(url);
+        } catch {
+          prompt("Copy share link:", url);
+        }
+        shareBtn.textContent = "Fallback link copied";
       }
+      setTimeout(() => (shareBtn.textContent = "Copy share link"), 1800);
     };
   }
 
-  // OG-ish document title
   document.title = `Crosswalk · TC ${tcNum} · Profile Read`;
 }
 
-const deal = resolveDeal();
+const deal = await resolveDeal();
 renderHistory(deal.id);
 renderCrosswalk(deal);
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.register("/sw.js").catch(() => {});
+}

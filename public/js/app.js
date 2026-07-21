@@ -16,6 +16,15 @@ import {
   applyFeedback,
   verdictFromTrue,
 } from "./hilo.js";
+import {
+  getAccount,
+  restoreAccount,
+  pullSync,
+  pushSync,
+  createServerShare,
+  initClerk,
+} from "./auth.js";
+import { track, hydrateBandsFromTelemetry } from "./telemetry.js";
 
 const EXAMPLES = [
   "Loves hiking",
@@ -83,13 +92,23 @@ const cropCanvas = document.getElementById("cropCanvas");
 const cropApply = document.getElementById("cropApply");
 const cropSkip = document.getElementById("cropSkip");
 const cropCancel = document.getElementById("cropCancel");
+const ocrPreview = document.getElementById("ocrPreview");
+const confList = document.getElementById("confList");
+const photoScoreEl = document.getElementById("photoScore");
+const reOcrBtn = document.getElementById("reOcrBtn");
+const recoveryCodeEl = document.getElementById("recoveryCode");
+const syncBtn = document.getElementById("syncBtn");
+const restoreBtn = document.getElementById("restoreBtn");
+const clerkBtn = document.getElementById("clerkBtn");
 
 let imageData = null;
 let imageMime = null;
-let pendingFullImage = null; // ImageBitmap/HTMLImage for crop
+let imagePreviewUrl = null;
+let pendingFullImage = null;
 let cropState = null;
 let lastDeal = null;
 let dealTimer = null;
+let lastExtractMeta = [];
 
 function escapeHtml(s) {
   return String(s).replace(
@@ -203,6 +222,7 @@ function encodeJpeg(img, sx, sy, sw, sh, max = 1400) {
 function setImage(result, name) {
   imageData = result.data;
   imageMime = result.mime;
+  imagePreviewUrl = result.preview;
   const thumb = document.getElementById("thumb");
   const thumbImg = document.getElementById("thumbImg");
   const thumbName = document.getElementById("thumbName");
@@ -342,9 +362,45 @@ Be honest, specific, a little playful, never mean.`;
 function extractPrompt() {
   return `OCR this dating-profile screenshot. Extract EVERY stated trait / interest / self-description / bio line / prompt answer.
 Ignore UI chrome (Like, buttons, nav, other cards).
-Respond with ONLY a JSON array of short strings (no objects, no markdown), max 10 items.
-Example: ["Loves hiking","Dog mom","6'2\\""]
+Respond with ONLY a JSON array of objects (no markdown), max 10:
+[{"text":"exact phrase","confidence":0.0-1.0}]
+confidence = how sure you are the OCR is correct (1 = crystal clear, 0.4 = guessy).
 If nothing readable, return [].`;
+}
+
+function photoPrompt() {
+  return `Look at this dating-profile photo (not just text). Infer 1-3 lifestyle / presentation signals a match might read from the image alone (e.g. "outdoor adventure photos", "group shot energy", "polished studio look").
+Respond ONLY with JSON array:
+[{"trait":"...","score":0-100,"signal":"...","tags":["photo"],"count":1|0|-1,"upgrade":"..."}]
+Be fair, never body-shame. If the image is mostly text/UI, return [].`;
+}
+
+function normalizeExtract(raw) {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((item) => {
+      if (typeof item === "string") {
+        return { text: item.trim(), confidence: 0.7 };
+      }
+      const text = String(item.text || item.trait || "").trim();
+      let confidence = Number(item.confidence);
+      if (!Number.isFinite(confidence)) confidence = 0.7;
+      confidence = Math.max(0, Math.min(1, confidence));
+      return { text, confidence };
+    })
+    .filter((x) => x.text)
+    .slice(0, 10);
+}
+
+function renderConfidence(meta) {
+  if (!confList) return;
+  confList.innerHTML = meta
+    .map((m) => {
+      const pct = Math.round(m.confidence * 100);
+      const cls = m.confidence >= 0.75 ? "hi" : m.confidence >= 0.5 ? "mid" : "lo";
+      return `<span class="conf ${cls}" title="OCR confidence">${escapeHtml(m.text)} · ${pct}%</span>`;
+    })
+    .join("");
 }
 
 async function extractFromImage() {
@@ -358,14 +414,13 @@ async function extractFromImage() {
     { type: "text", text: extractPrompt() },
   ];
   let text = await callEvaluate(content, "extract");
-  let traits;
+  let meta = [];
   try {
-    traits = parseJsonArray(text).map(String).map((t) => t.trim()).filter(Boolean);
+    meta = normalizeExtract(parseJsonArray(text));
   } catch {
-    traits = [];
+    meta = [];
   }
-  if (!traits.length) {
-    // one retry with stricter prompt
+  if (!meta.length) {
     text = await callEvaluate(
       [
         content[0],
@@ -379,13 +434,44 @@ async function extractFromImage() {
       "extract"
     );
     try {
-      traits = parseJsonArray(text).map(String).map((t) => t.trim()).filter(Boolean);
+      meta = normalizeExtract(parseJsonArray(text));
     } catch {
-      traits = [];
+      meta = [];
     }
   }
-  if (!traits.length) throw new Error("no traits");
-  return traits.slice(0, 10);
+  if (!meta.length) {
+    track("ocr_fail");
+    throw new Error("no traits");
+  }
+  lastExtractMeta = meta;
+  return meta.map((m) => m.text);
+}
+
+async function scorePhotoSignals() {
+  if (!imageData || !photoScoreEl?.checked) return [];
+  statusEl.textContent = "Reading photo vibe…";
+  try {
+    const text = await callEvaluate(
+      [
+        {
+          type: "image",
+          source: { type: "base64", media_type: imageMime, data: imageData },
+        },
+        { type: "text", text: photoPrompt() },
+      ],
+      "photo"
+    );
+    return parseJsonArray(text)
+      .map((it) => normalizeItem(it))
+      .filter((it) => it.trait)
+      .slice(0, 3)
+      .map((it) => ({
+        ...it,
+        tags: Array.from(new Set([...(it.tags || []), "photo"])),
+      }));
+  } catch {
+    return [];
+  }
 }
 
 async function scoreTraits(traits) {
@@ -400,6 +486,8 @@ async function scoreTraits(traits) {
 
 function showExtract(traits) {
   extractInput.value = traits.join("\n");
+  if (ocrPreview && imagePreviewUrl) ocrPreview.src = imagePreviewUrl;
+  renderConfidence(lastExtractMeta);
   extractPanel.classList.add("show");
   extractPanel.scrollIntoView({ behavior: "smooth", block: "nearest" });
 }
@@ -464,10 +552,11 @@ confirmExtract?.addEventListener("click", async () => {
   goBtn.disabled = true;
   try {
     const parsed = await scoreTraits(traits);
+    const photoItems = await scorePhotoSignals();
+    const merged = [...parsed, ...photoItems].slice(0, 12);
     extractPanel.classList.remove("show");
-    // Text path: drop image so re-runs use edited text if user tweaks input
     input.value = traits.join("\n");
-    finishDeal(parsed);
+    finishDeal(merged);
   } catch (e) {
     console.error(e);
     showErr("Couldn't score those traits. Try again.");
@@ -482,6 +571,24 @@ cancelExtract?.addEventListener("click", () => {
   extractPanel.classList.remove("show");
 });
 
+reOcrBtn?.addEventListener("click", async () => {
+  if (!imageData) {
+    showErr("No crop loaded — upload a screenshot first.");
+    return;
+  }
+  reOcrBtn.disabled = true;
+  try {
+    const traits = await extractFromImage();
+    showExtract(traits);
+    track("ocr_retry");
+  } catch (e) {
+    showErr("Re-OCR still empty. Crop tighter on the bio text.");
+  } finally {
+    reOcrBtn.disabled = false;
+    statusEl.classList.remove("show");
+  }
+});
+
 function finishDeal(items) {
   let running = 0;
   items.forEach((it) => (running += it.count));
@@ -494,6 +601,7 @@ function finishDeal(items) {
     verdict: { word: v.word, running, trueCount: tc },
   };
   lastDeal = saveDeal(deal);
+  track("deal", { verdict: deal.verdict?.word, n: items.length });
   renderHistory();
   updateBandsLabel();
   dealAnimated(items, deal);
@@ -503,16 +611,29 @@ function finishDeal(items) {
   if (shareBtn) {
     shareBtn.style.display = "inline-block";
     shareBtn.onclick = async () => {
-      const url = shareUrl(deal);
+      shareBtn.textContent = "Creating link…";
       try {
+        const server = await createServerShare(deal);
+        const url = server.url.startsWith("http")
+          ? server.url
+          : location.origin + server.url;
         await navigator.clipboard.writeText(url);
-        shareBtn.textContent = "Link copied";
-        setTimeout(() => (shareBtn.textContent = "Copy share link"), 1600);
+        shareBtn.textContent = "Short link copied";
+        track("share_server");
       } catch {
-        prompt("Copy share link:", url);
+        const url = shareUrl(deal);
+        try {
+          await navigator.clipboard.writeText(url);
+        } catch {
+          prompt("Copy share link:", url);
+        }
+        shareBtn.textContent = "Fallback link copied";
+        track("share_fallback");
       }
+      setTimeout(() => (shareBtn.textContent = "Copy share link"), 1800);
     };
   }
+  pushSync().catch(() => {});
 }
 
 /* ---------- animated shoe ---------- */
@@ -588,7 +709,9 @@ function dealAnimated(items, deal) {
 
     el.querySelectorAll(".fb-btn").forEach((btn) => {
       btn.addEventListener("click", () => {
-        applyFeedback(it, btn.dataset.agree === "1");
+        const agree = btn.dataset.agree === "1";
+        applyFeedback(it, agree);
+        track(agree ? "thumb_up" : "thumb_down", { score: it.score });
         updateBandsLabel();
         el.querySelector(".feedback").innerHTML =
           '<span class="fb-label">Thanks — bands updated</span>';
@@ -719,5 +842,71 @@ input.addEventListener("keydown", (e) => {
   if ((e.metaKey || e.ctrlKey) && e.key === "Enter") evaluate();
 });
 
+function refreshAccountUI() {
+  const account = getAccount();
+  if (recoveryCodeEl) recoveryCodeEl.textContent = account.recovery;
+}
+
+syncBtn?.addEventListener("click", async () => {
+  syncBtn.disabled = true;
+  syncBtn.textContent = "Syncing…";
+  try {
+    await pushSync();
+    const pulled = await pullSync();
+    renderHistory();
+    syncBtn.textContent = `Synced (${pulled.count})`;
+    track("sync");
+  } catch (e) {
+    syncBtn.textContent = "Sync failed";
+    showErr(e.message || "Sync failed");
+  } finally {
+    setTimeout(() => {
+      syncBtn.disabled = false;
+      syncBtn.textContent = "Sync now";
+    }, 1600);
+  }
+});
+
+restoreBtn?.addEventListener("click", async () => {
+  const code = prompt("Paste your recovery code:");
+  if (!code) return;
+  try {
+    restoreAccount(code);
+    refreshAccountUI();
+    await pullSync();
+    renderHistory();
+    track("restore");
+  } catch (e) {
+    showErr(e.message || "Could not restore");
+  }
+});
+
+// Share-target / deep link text
+const params = new URLSearchParams(location.search);
+const sharedText = params.get("text") || params.get("title");
+if (sharedText && !input.value) input.value = sharedText;
+
+refreshAccountUI();
 updateBandsLabel();
 renderHistory();
+hydrateBandsFromTelemetry().then(() => updateBandsLabel());
+pullSync().then(() => renderHistory()).catch(() => {});
+
+fetch("/api/config")
+  .then((r) => r.json())
+  .then(async (cfg) => {
+    if (cfg.clerkPublishableKey && clerkBtn) {
+      clerkBtn.style.display = "inline-block";
+      const clerk = await initClerk(cfg.clerkPublishableKey);
+      clerkBtn.onclick = () => {
+        if (!clerk) return;
+        if (clerk.user) clerk.signOut();
+        else clerk.openSignIn();
+      };
+    }
+  })
+  .catch(() => {});
+
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.register("/sw.js").catch(() => {});
+}

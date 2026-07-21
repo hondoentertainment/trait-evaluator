@@ -112,8 +112,9 @@ export default async function handler(req, res) {
       },
       body: JSON.stringify({
         model,
-        max_tokens: mode === "extract" ? 800 : hasImage ? 2500 : 1500,
-        temperature: mode === "extract" ? 0.2 : 0.4,
+        max_tokens:
+          mode === "extract" || mode === "photo" ? 900 : hasImage ? 2500 : 1500,
+        temperature: mode === "extract" || mode === "photo" ? 0.2 : 0.4,
         messages: [{ role: "user", content: openAiContent }],
       }),
     });

@@ -8,11 +8,14 @@
 <meta property="og:title" content="Profile Read — deal the shoe">
 <meta property="og:description" content="Count dating-profile traits like a blackjack shoe. HIT, STAND, or BUST — then open the value crosswalk.">
 <meta property="og:type" content="website">
-<meta property="og:image" content="/og.svg">
+<meta property="og:image" content="/og.png">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="Profile Read — deal the shoe">
 <meta name="twitter:description" content="Hi-Lo trait counts for dating profiles. Shareable shoe + crosswalk.">
-<meta name="twitter:image" content="/og.svg">
+<meta name="twitter:image" content="/og.png">
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="theme-color" content="#5b2a86">
+<link rel="apple-touch-icon" href="/icons/icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,900&family=Space+Grotesk:wght@400;500;700&family=Space+Mono&display=swap" rel="stylesheet">
@@ -159,6 +162,23 @@
   .modal-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
   .modal-actions button{font-size:13px;padding:9px 14px}
   .modal-actions .ghost{background:var(--paper)}
+  .account-bar{
+    display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;
+    margin:12px 0 8px;padding:12px 14px;border:1px dashed var(--rule);background:var(--card);
+  }
+  .account-bar code{font-family:'Space Mono',monospace;font-size:12px;color:var(--plum)}
+  .account-bar .tiny{font-size:12px;color:var(--muted)}
+  .account-actions{display:flex;gap:8px;flex-wrap:wrap}
+  .account-actions button,.account-actions a{
+    font-size:12px;padding:7px 12px;box-shadow:2px 2px 0 var(--ink);background:var(--paper);
+  }
+  .ocr-compare{display:grid;grid-template-columns:120px 1fr;gap:12px;margin:10px 0}
+  @media(max-width:520px){.ocr-compare{grid-template-columns:1fr}}
+  .ocr-compare img{width:120px;height:120px;object-fit:cover;border:1px solid var(--ink)}
+  .conf-list{font-family:'Space Mono',monospace;font-size:11px;margin-top:8px;display:flex;flex-wrap:wrap;gap:6px}
+  .conf{padding:3px 8px;border:1px solid var(--rule)}
+  .conf.hi{background:#e7f6ea}.conf.mid{background:#fff4d6}.conf.lo{background:#ffe3df}
+  .photo-row{display:flex;align-items:center;gap:8px;margin-top:10px;font-size:13px;color:var(--muted)}
 </style>
 </head>
 <body>
@@ -186,7 +206,7 @@
     <a class="show-panel" href="/crosswalk" id="showCrosswalk">
       <div class="show-top"><span class="show-page">Page 2</span><span class="show-go">Open →</span></div>
       <div class="show-title">Value crosswalk</div>
-      <p class="show-copy">Grid of every trait: score → count → running total, tags, signal, upgrade.</p>
+      <p class="show-copy">Grid of every trait: score → count → running total, tags, signal, upgrade. Share with /s/ links.</p>
       <div class="show-stage">
         <table class="mini-grid">
           <thead><tr><th>Trait</th><th>Score</th><th>Cnt</th><th>Run</th></tr></thead>
@@ -201,6 +221,19 @@
   </div>
 
   <div id="history"></div>
+
+  <div class="account-bar" id="accountBar">
+    <div>
+      <div class="tiny">Account · syncs shoes across devices</div>
+      <div>Recovery <code id="recoveryCode">••••</code></div>
+    </div>
+    <div class="account-actions">
+      <button type="button" id="syncBtn">Sync now</button>
+      <button type="button" id="restoreBtn">Restore code</button>
+      <a href="/compare">Compare</a>
+      <button type="button" id="clerkBtn" style="display:none">Sign in</button>
+    </div>
+  </div>
 
   <div class="wrap-narrow">
     <div class="tool-mark" id="deal">Page 1 · deal the shoe</div>
@@ -230,10 +263,21 @@
 
     <div class="extract" id="extractPanel">
       <label for="extractInput">Extracted traits · edit before dealing</label>
-      <textarea id="extractInput"></textarea>
+      <div class="ocr-compare">
+        <img id="ocrPreview" alt="Crop preview">
+        <div>
+          <textarea id="extractInput"></textarea>
+          <div class="conf-list" id="confList"></div>
+          <div class="photo-row">
+            <input type="checkbox" id="photoScore" checked>
+            <label for="photoScore" style="margin:0;letter-spacing:0;text-transform:none;font-family:inherit">Also score vibe from the photo (faces/lifestyle)</label>
+          </div>
+        </div>
+      </div>
       <div class="row">
-        <span class="hint">Fix OCR mistakes here, then deal.</span>
-        <button type="button" id="cancelExtract" class="ghost" style="background:var(--paper)">Cancel</button>
+        <span class="hint">Fix OCR mistakes, re-crop if needed, then deal.</span>
+        <button type="button" id="reOcrBtn" style="background:var(--paper)">Re-OCR crop</button>
+        <button type="button" id="cancelExtract" style="background:var(--paper)">Cancel</button>
         <button type="button" id="confirmExtract">Deal this shoe →</button>
       </div>
     </div>
