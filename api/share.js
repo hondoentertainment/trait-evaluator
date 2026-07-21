@@ -22,7 +22,15 @@ export default async function handler(req, res) {
     }
 
     if (req.method === "POST") {
-      const { deal } = req.body || {};
+      let body = req.body;
+      if (typeof body === "string") {
+        try {
+          body = JSON.parse(body);
+        } catch {
+          return res.status(400).json({ error: { message: "Invalid JSON" } });
+        }
+      }
+      const { deal } = body || {};
       if (!deal?.items?.length) {
         return res.status(400).json({ error: { message: "Missing deal.items" } });
       }

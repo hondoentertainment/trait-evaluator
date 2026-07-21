@@ -5,7 +5,7 @@
     { "source": "/", "destination": "/index.html" },
     { "source": "/crosswalk", "destination": "/crosswalk.html" },
     { "source": "/compare", "destination": "/compare.html" },
-    { "source": "/s/:id", "destination": "/s.html" }
+    { "source": "/s/:id", "destination": "/api/go?id=:id" }
   ],
   "headers": [
     {
