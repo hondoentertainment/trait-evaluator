@@ -38,13 +38,22 @@
   .delta{margin-top:18px;border:1.5px solid var(--ink);background:var(--ink);color:var(--card);padding:18px}
   .delta .word{font-family:'Fraunces',serif;font-weight:900;font-size:40px;color:var(--lime)}
   .meta{font-family:'Space Mono',monospace;font-size:11px;color:#b6ab99;margin-top:6px}
+  .empty{margin-top:18px;color:var(--muted)}
+  .trait-table-wrap{margin-top:22px}
+  .trait-table-wrap h3{font-family:'Fraunces',serif;font-size:22px;margin-bottom:10px}
+  .trait-table{width:100%;border-collapse:collapse;font-size:14px;background:var(--card);border:1.5px solid var(--ink)}
+  .trait-table th,.trait-table td{padding:10px 12px;text-align:left;border-bottom:1px solid var(--rule)}
+  .trait-table th{font-family:'Space Mono',monospace;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+  .trait-table tr.pos td:nth-child(4){color:#3a7d44;font-weight:700}
+  .trait-table tr.neg td:nth-child(4){color:var(--coral);font-weight:700}
+  @media(max-width:700px){.trait-table{font-size:12px}.trait-table th:nth-child(5),.trait-table td:nth-child(5){display:none}}
 </style>
 </head>
 <body>
 <div class="wrap">
   <div class="eyebrow">Profile Read · compare</div>
   <h1>Head-to-head <em>shoes</em></h1>
-  <p class="sub">Pick two saved deals. We compare running count, true count, and the final call.</p>
+  <p class="sub">Pick two saved deals — or open <code>?a=&amp;b=</code> / <code>?asid=&amp;bsid=</code> — for running count, true count, and trait-level Δ.</p>
   <div class="nav">
     <a href="/">← Shoe</a>
     <a href="/crosswalk">Crosswalk</a>

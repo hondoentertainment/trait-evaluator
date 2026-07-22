@@ -2,6 +2,26 @@ import { available, getJson, putJson } from "./_lib/githubStore.js";
 
 const DEFAULT_BANDS = { high: 70, low: 35 };
 
+function suggestBands(agg) {
+  let high = Number(agg.bands?.high ?? DEFAULT_BANDS.high);
+  let low = Number(agg.bands?.low ?? DEFAULT_BANDS.low);
+  const up = agg.thumbsUp || 0;
+  const down = agg.thumbsDown || 0;
+  // Only nudge when we have enough signal, and persist slowly.
+  if (down >= up + 15 && down >= 20) {
+    high = Math.min(85, high + 0.5);
+    low = Math.max(15, low - 0.5);
+  } else if (up >= down + 25 && up >= 30) {
+    high = Math.max(55, high - 0.3);
+    low = Math.min(45, low + 0.3);
+  }
+  if (low >= high - 10) low = high - 10;
+  return {
+    high: Math.round(high * 10) / 10,
+    low: Math.round(low * 10) / 10,
+  };
+}
+
 export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
@@ -11,7 +31,7 @@ export default async function handler(req, res) {
   try {
     if (!(await available())) {
       if (req.method === "GET") {
-        return res.status(200).json({ bands: DEFAULT_BANDS, events: 0, offline: {} });
+        return res.status(200).json({ bands: DEFAULT_BANDS, events: 0, today: {} });
       }
       return res.status(204).end();
     }
@@ -29,19 +49,19 @@ export default async function handler(req, res) {
         deals: 0,
         verdicts: {},
       };
-      // Suggest band tweaks from thumbs
-      let { high, low } = agg.bands || DEFAULT_BANDS;
-      const up = agg.thumbsUp || 0;
-      const down = agg.thumbsDown || 0;
-      if (down > up + 20) {
-        high = Math.min(85, high + 1);
-        low = Math.max(15, low - 1);
-      } else if (up > down + 40) {
-        high = Math.max(55, high - 0.5);
-        low = Math.min(45, low + 0.5);
+      const bands = suggestBands(agg);
+      // Persist suggestions when they drift from stored bands
+      if (
+        !agg.bands ||
+        agg.bands.high !== bands.high ||
+        agg.bands.low !== bands.low
+      ) {
+        agg.bands = bands;
+        agg.bandsUpdatedAt = Date.now();
+        await putJson("telemetry/aggregate.json", agg, "telemetry bands persist");
       }
       return res.status(200).json({
-        bands: { high, low },
+        bands,
         events: dayData.events?.length || 0,
         aggregate: agg,
         today: dayData.counts || {},
@@ -49,7 +69,15 @@ export default async function handler(req, res) {
     }
 
     if (req.method === "POST") {
-      const event = req.body || {};
+      let body = req.body;
+      if (typeof body === "string") {
+        try {
+          body = JSON.parse(body);
+        } catch {
+          body = {};
+        }
+      }
+      const event = body || {};
       const type = String(event.type || "unknown").slice(0, 40);
       const dayData = (await getJson(path)) || { events: [], counts: {} };
       dayData.counts[type] = (dayData.counts[type] || 0) + 1;
@@ -76,6 +104,11 @@ export default async function handler(req, res) {
         agg.deals++;
         const w = event.meta?.verdict || "UNKNOWN";
         agg.verdicts[w] = (agg.verdicts[w] || 0) + 1;
+      }
+      // Recompute + persist bands on every thumb/deal batch
+      if (type === "thumb_up" || type === "thumb_down" || type === "deal") {
+        agg.bands = suggestBands(agg);
+        agg.bandsUpdatedAt = Date.now();
       }
       await putJson("telemetry/aggregate.json", agg, "telemetry aggregate");
       return res.status(204).end();

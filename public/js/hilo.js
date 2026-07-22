@@ -1,4 +1,4 @@
-import { loadFeedback, saveFeedback } from "./store.js";
+import { loadFeedback, saveFeedback, loadTraitFeedback, saveTraitFeedback } from "./store.js";
 
 export function getBands() {
   const fb = loadFeedback();
@@ -6,6 +6,36 @@ export function getBands() {
     high: Math.max(55, Math.min(85, Number(fb.high) || 70)),
     low: Math.max(15, Math.min(45, Number(fb.low) || 35)),
   };
+}
+
+export function traitKey(trait) {
+  return String(trait || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()
+    .slice(0, 80);
+}
+
+/** Bands nudged by global feedback + per-trait history. */
+export function bandsForTrait(trait) {
+  const base = getBands();
+  const key = traitKey(trait);
+  if (!key) return base;
+  const map = loadTraitFeedback();
+  const row = map[key];
+  if (!row || !(row.up || row.down)) return base;
+  let { high, low } = base;
+  // More disagrees on this trait → widen (harder to hit ±1); agrees → tighten.
+  const delta = (row.down || 0) - (row.up || 0);
+  if (delta >= 2) {
+    high = Math.min(85, high + Math.min(6, delta));
+    low = Math.max(15, low - Math.min(6, delta));
+  } else if (delta <= -2) {
+    high = Math.max(55, high - Math.min(4, -delta));
+    low = Math.min(45, low + Math.min(4, -delta));
+  }
+  if (low >= high - 10) low = high - 10;
+  return { high, low };
 }
 
 export function countFromScore(score, bands = getBands()) {
@@ -39,40 +69,53 @@ export function scoreColor(n) {
   return "#ff5c49";
 }
 
-export function normalizeItem(it, bands = getBands()) {
+export function whyCount(item, bands) {
+  const b = bands || bandsForTrait(item.trait);
+  const score = item.score;
+  const count = item.count ?? countFromScore(score, b);
+  if (count === 1) {
+    return `Why +1: score ${score} ≥ high band ${b.high} — reads as a distinctive high card.`;
+  }
+  if (count === -1) {
+    return `Why −1: score ${score} ≤ low band ${b.low} — low-info / cliché card.`;
+  }
+  return `Why 0: score ${score} sits between ${b.low + 1}–${b.high - 1} — neither high nor low card.`;
+}
+
+export function normalizeItem(it, bands) {
   let score = Number(it.score);
   if (!Number.isFinite(score)) score = 50;
   if (score > 0 && score <= 1) score = Math.round(score * 100);
   score = Math.max(0, Math.min(100, Math.round(score)));
+  const trait = String(it.trait || "").trim();
+  const b = bands || bandsForTrait(trait);
   return {
-    trait: String(it.trait || "").trim(),
+    trait,
     score,
     signal: String(it.signal || "").trim(),
     tags: Array.isArray(it.tags) ? it.tags.map(String) : [],
-    count: countFromScore(score, bands),
+    count: countFromScore(score, b),
     upgrade: String(it.upgrade || "").trim(),
   };
 }
 
 /**
- * Thumbs feedback nudges Hi-Lo bands.
+ * Thumbs feedback nudges global Hi-Lo bands + per-trait memory.
  * agree=true reinforces the assigned count; false pushes the band away.
  */
 export function applyFeedback(item, agree) {
   const fb = loadFeedback();
   const bands = getBands();
   const score = item.score;
-  const count = countFromScore(score, bands);
+  const count = countFromScore(score, bandsForTrait(item.trait));
 
   if (agree) {
-    // Slightly tighten toward this score's side
     if (count === 1) fb.high = Math.max(55, fb.high - 0.5);
     else if (count === -1) fb.low = Math.min(45, fb.low + 0.5);
   } else {
     if (count === 1) fb.high = Math.min(85, fb.high + 1.5);
     else if (count === -1) fb.low = Math.max(15, fb.low - 1.5);
     else {
-      // Neutral disagreed: push toward nearer edge
       if (score >= (bands.high + bands.low) / 2) fb.high = Math.max(55, fb.high - 1);
       else fb.low = Math.min(45, fb.low + 1);
     }
@@ -82,6 +125,27 @@ export function applyFeedback(item, agree) {
   if (fb.low >= fb.high - 10) fb.low = fb.high - 10;
   fb.votes = (fb.votes || 0) + 1;
   saveFeedback(fb);
+
+  const key = traitKey(item.trait);
+  if (key) {
+    const map = loadTraitFeedback();
+    const row = map[key] || { up: 0, down: 0, trait: item.trait };
+    if (agree) row.up = (row.up || 0) + 1;
+    else row.down = (row.down || 0) + 1;
+    row.lastScore = score;
+    row.updatedAt = Date.now();
+    map[key] = row;
+    // Cap map size
+    const keys = Object.keys(map);
+    if (keys.length > 200) {
+      keys
+        .sort((a, b) => (map[a].updatedAt || 0) - (map[b].updatedAt || 0))
+        .slice(0, keys.length - 200)
+        .forEach((k) => delete map[k]);
+    }
+    saveTraitFeedback(map);
+  }
+
   return getBands();
 }
 

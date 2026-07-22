@@ -2,7 +2,9 @@
 const DEALS_KEY = "profileRead.deals.v1";
 const CURRENT_KEY = "profileRead.current.v1";
 const FEEDBACK_KEY = "profileRead.feedback.v1";
+const TRAIT_FB_KEY = "profileRead.traitFeedback.v1";
 const CLIENT_RATE_KEY = "profileRead.rate.v1";
+const EVAL_CACHE_KEY = "profileRead.evalCache.v1";
 
 export function uid() {
   return (
@@ -21,11 +23,11 @@ export function loadDeals() {
 
 export function saveDeal(deal) {
   const deals = loadDeals();
-  deals[deal.id] = deal;
+  deals[deal.id] = { ...deal, deleted: false };
   // Cap history
-  const ids = Object.keys(deals).sort(
-    (a, b) => (deals[b].createdAt || 0) - (deals[a].createdAt || 0)
-  );
+  const ids = Object.keys(deals)
+    .filter((id) => !deals[id].deleted)
+    .sort((a, b) => (deals[b].createdAt || 0) - (deals[a].createdAt || 0));
   while (ids.length > 40) {
     delete deals[ids.pop()];
   }
@@ -37,9 +39,30 @@ export function saveDeal(deal) {
   return deal;
 }
 
+/** Soft-delete so sync can tombstone remotely. */
+export function deleteDeal(id) {
+  const deals = loadDeals();
+  if (!deals[id]) return false;
+  deals[id] = {
+    ...deals[id],
+    deleted: true,
+    deletedAt: Date.now(),
+    items: [],
+  };
+  localStorage.setItem(DEALS_KEY, JSON.stringify(deals));
+  if (localStorage.getItem(CURRENT_KEY) === id) {
+    const next = recentDeals(1)[0];
+    if (next) localStorage.setItem(CURRENT_KEY, next.id);
+    else localStorage.removeItem(CURRENT_KEY);
+  }
+  return true;
+}
+
 export function getDeal(id) {
   const deals = loadDeals();
-  return deals[id] || null;
+  const d = deals[id];
+  if (!d || d.deleted) return null;
+  return d;
 }
 
 export function getCurrentDeal() {
@@ -55,6 +78,7 @@ export function getCurrentDeal() {
 export function recentDeals(limit = 8) {
   const deals = loadDeals();
   return Object.values(deals)
+    .filter((d) => d && !d.deleted && d.items?.length)
     .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))
     .slice(0, limit);
 }
@@ -120,6 +144,47 @@ export function loadFeedback() {
 
 export function saveFeedback(fb) {
   localStorage.setItem(FEEDBACK_KEY, JSON.stringify(fb));
+}
+
+export function loadTraitFeedback() {
+  try {
+    return JSON.parse(localStorage.getItem(TRAIT_FB_KEY) || "{}");
+  } catch {
+    return {};
+  }
+}
+
+export function saveTraitFeedback(map) {
+  localStorage.setItem(TRAIT_FB_KEY, JSON.stringify(map || {}));
+}
+
+/** Client-side evaluate cache for identical text score prompts. */
+export function getEvalCache(key) {
+  try {
+    const all = JSON.parse(sessionStorage.getItem(EVAL_CACHE_KEY) || "{}");
+    const hit = all[key];
+    if (!hit || Date.now() - hit.at > 60 * 60 * 1000) return null;
+    return hit.text;
+  } catch {
+    return null;
+  }
+}
+
+export function setEvalCache(key, text) {
+  try {
+    const all = JSON.parse(sessionStorage.getItem(EVAL_CACHE_KEY) || "{}");
+    all[key] = { at: Date.now(), text };
+    const keys = Object.keys(all);
+    if (keys.length > 40) {
+      keys
+        .sort((a, b) => all[a].at - all[b].at)
+        .slice(0, keys.length - 40)
+        .forEach((k) => delete all[k]);
+    }
+    sessionStorage.setItem(EVAL_CACHE_KEY, JSON.stringify(all));
+  } catch {
+    /* quota */
+  }
 }
 
 /** Client-side spend guard: max N calls / hour. */

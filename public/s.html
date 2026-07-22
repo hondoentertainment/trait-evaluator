@@ -3,35 +3,22 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Opening share · Profile Read</title>
+<title>Short share · Profile Read</title>
 <meta name="robots" content="noindex">
-<style>
-  body{font-family:system-ui,sans-serif;background:#f6efe4;color:#171310;display:grid;place-items:center;min-height:100vh;margin:0}
-  .box{text-align:center;padding:24px}
-  a{color:#5b2a86}
-</style>
-</head>
-<body>
-<div class="box">
-  <p id="msg">Opening shared shoe…</p>
-  <p><a href="/">Home</a></p>
-</div>
-<script type="module">
-import { saveDeal } from "/js/store.js";
-import { normalizeItem } from "/js/hilo.js";
-
-const id = location.pathname.split("/").filter(Boolean).pop();
-const msg = document.getElementById("msg");
-try {
-  const res = await fetch(`/api/share?id=${encodeURIComponent(id)}`);
-  if (!res.ok) throw new Error("not found");
-  const deal = await res.json();
-  deal.items = (deal.items || []).map((it) => normalizeItem(it));
-  saveDeal(deal);
-  location.replace(`/crosswalk?id=${encodeURIComponent(deal.id)}`);
-} catch {
-  msg.textContent = "Share not found or expired.";
+<meta http-equiv="refresh" content="0;url=/">
+<script>
+// Production short links use vercel rewrite → /api/go?id=:id (302 to crosswalk).
+// This file is a fallback if /s/:id is ever served as static HTML.
+const parts = location.pathname.split("/").filter(Boolean);
+const id = parts[parts.length - 1];
+if (id && id !== "s") {
+  location.replace("/api/go?id=" + encodeURIComponent(id));
+} else {
+  location.replace("/");
 }
 </script>
+</head>
+<body>
+<p><a href="/">Profile Read</a></p>
 </body>
 </html>

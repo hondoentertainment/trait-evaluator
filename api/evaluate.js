@@ -1,4 +1,6 @@
+import { createHash } from "node:crypto";
 import { getVercelOidcToken } from "@vercel/oidc";
+import { available, getJson, putJson } from "./_lib/githubStore.js";
 
 export const config = {
   api: {
@@ -7,11 +9,15 @@ export const config = {
   maxDuration: 60,
 };
 
-// Best-effort in-memory rate limit (per isolate). Clients also self-limit.
+// Best-effort in-memory rate limit + response cache (per isolate).
 const hits = new Map();
+const memCache = new Map();
 const WINDOW_MS = 60 * 60 * 1000;
 const MAX_PER_WINDOW = 40;
-const MAX_CONTENT_CHARS = 6_500_000; // ~base64 image ceiling
+const MAX_CONTENT_CHARS = 6_500_000;
+const MEM_CACHE_TTL = 30 * 60 * 1000;
+const MEM_CACHE_MAX = 80;
+const GH_CACHE_TTL = 7 * 24 * 60 * 60 * 1000;
 
 function clientKey(req) {
   return (
@@ -34,6 +40,43 @@ function rateLimit(req) {
   arr.push(now);
   hits.set(key, arr);
   return { ok: true };
+}
+
+function contentHash(payload) {
+  return createHash("sha256").update(payload).digest("hex").slice(0, 32);
+}
+
+function memGet(key) {
+  const hit = memCache.get(key);
+  if (!hit) return null;
+  if (Date.now() - hit.at > MEM_CACHE_TTL) {
+    memCache.delete(key);
+    return null;
+  }
+  return hit.value;
+}
+
+function memSet(key, value) {
+  memCache.set(key, { at: Date.now(), value });
+  if (memCache.size > MEM_CACHE_MAX) {
+    const first = memCache.keys().next().value;
+    memCache.delete(first);
+  }
+}
+
+function pickModels(useDirectXai, mode) {
+  // Tiered: OCR/photo use the cheap/fast path; scoring can use a richer model.
+  if (useDirectXai) {
+    if (mode === "extract" || mode === "photo") {
+      return { model: "grok-4-1-fast-non-reasoning", tier: "ocr" };
+    }
+    return { model: "grok-4-1-fast-non-reasoning", tier: "score" };
+  }
+  if (mode === "extract" || mode === "photo") {
+    return { model: "xai/grok-4.1-fast-non-reasoning", tier: "ocr" };
+  }
+  // Score path — same family for now; gateway can remap via AI Gateway routing later.
+  return { model: "xai/grok-4.1-fast-non-reasoning", tier: "score" };
 }
 
 export default async function handler(req, res) {
@@ -79,10 +122,6 @@ export default async function handler(req, res) {
   const baseUrl = useDirectXai
     ? "https://api.x.ai/v1"
     : "https://ai-gateway.vercel.sh/v1";
-  // Fast non-reasoning keeps spend predictable on free/paid gateway.
-  const model = useDirectXai
-    ? "grok-4-1-fast-non-reasoning"
-    : "xai/grok-4.1-fast-non-reasoning";
 
   try {
     const { content, mode } = req.body || {};
@@ -99,10 +138,37 @@ export default async function handler(req, res) {
       });
     }
 
-    const openAiContent = toOpenAiContent(content);
+    const openAiContent = toOpenAiContent(content, mode);
     const hasImage = Array.isArray(openAiContent)
       ? openAiContent.some((b) => b?.type === "image_url")
       : false;
+    const { model, tier } = pickModels(useDirectXai, mode);
+
+    // Cache text scoring only (images are huge + rarely identical).
+    const cacheable = !hasImage && (mode === "score" || !mode);
+    const hash = cacheable
+      ? contentHash(JSON.stringify({ mode: mode || "score", content: openAiContent }))
+      : null;
+
+    if (hash) {
+      const mem = memGet(hash);
+      if (mem) {
+        res.setHeader("X-Cache", "MEM");
+        return res.status(200).json({ ...mem, cached: true });
+      }
+      if (await available()) {
+        try {
+          const gh = await getJson(`cache/eval/${hash}.json`);
+          if (gh?.at && Date.now() - gh.at < GH_CACHE_TTL && gh.payload) {
+            memSet(hash, gh.payload);
+            res.setHeader("X-Cache", "GH");
+            return res.status(200).json({ ...gh.payload, cached: true });
+          }
+        } catch {
+          /* ignore cache miss errors */
+        }
+      }
+    }
 
     const upstream = await fetch(`${baseUrl}/chat/completions`, {
       method: "POST",
@@ -130,10 +196,25 @@ export default async function handler(req, res) {
     }
 
     const text = data?.choices?.[0]?.message?.content ?? "";
-    return res.status(200).json({
+    const payload = {
       content: [{ type: "text", text }],
       model,
-    });
+      tier,
+    };
+
+    if (hash) {
+      memSet(hash, payload);
+      if (await available()) {
+        putJson(
+          `cache/eval/${hash}.json`,
+          { at: Date.now(), payload },
+          `eval cache ${hash.slice(0, 8)}`
+        ).catch(() => {});
+      }
+    }
+
+    res.setHeader("X-Cache", "MISS");
+    return res.status(200).json(payload);
   } catch (err) {
     return res
       .status(500)
@@ -141,9 +222,12 @@ export default async function handler(req, res) {
   }
 }
 
-function toOpenAiContent(content) {
+function toOpenAiContent(content, mode) {
   if (typeof content === "string") return content;
   if (!Array.isArray(content)) return String(content ?? "");
+
+  const detail =
+    mode === "extract" || mode === "photo" ? "low" : "high";
 
   return content.map((block) => {
     if (block?.type === "text") {
@@ -155,7 +239,7 @@ function toOpenAiContent(content) {
         type: "image_url",
         image_url: {
           url: `data:${mime};base64,${block.source.data}`,
-          detail: "high",
+          detail,
         },
       };
     }

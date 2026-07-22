@@ -31,24 +31,36 @@ async function getFile(path) {
   return { sha: data.sha, data: JSON.parse(json) };
 }
 
-async function putFile(path, data, message) {
-  const existing = await getFile(path).catch(() => null);
+async function putFileOnce(path, data, message, sha) {
   const body = {
     message: message || `update ${path}`,
     content: Buffer.from(JSON.stringify(data, null, 2)).toString("base64"),
-    ...(existing?.sha ? { sha: existing.sha } : {}),
+    ...(sha ? { sha } : {}),
   };
   const url = `https://api.github.com/repos/${REPO()}/contents/${path}`;
-  const res = await fetch(url, {
+  return fetch(url, {
     method: "PUT",
     headers: { ...headers(), "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
-  if (!res.ok) {
+}
+
+async function putFile(path, data, message, attempts = 4) {
+  let lastErr = null;
+  for (let i = 0; i < attempts; i++) {
+    const existing = await getFile(path).catch(() => null);
+    const res = await putFileOnce(path, data, message, existing?.sha);
+    if (res.ok) return res.json();
     const t = await res.text();
-    throw new Error(`GitHub PUT ${res.status}: ${t}`);
+    lastErr = new Error(`GitHub PUT ${res.status}: ${t}`);
+    // 409 conflict / 422 sha mismatch — refetch and retry
+    if (res.status === 409 || res.status === 422) {
+      await new Promise((r) => setTimeout(r, 80 * (i + 1)));
+      continue;
+    }
+    throw lastErr;
   }
-  return res.json();
+  throw lastErr || new Error("GitHub PUT failed after retries");
 }
 
 export async function getJson(path) {
@@ -58,6 +70,25 @@ export async function getJson(path) {
 
 export async function putJson(path, data, message) {
   return putFile(path, data, message);
+}
+
+export async function deleteJson(path, message) {
+  const existing = await getFile(path);
+  if (!existing) return null;
+  const url = `https://api.github.com/repos/${REPO()}/contents/${path}`;
+  const res = await fetch(url, {
+    method: "DELETE",
+    headers: { ...headers(), "Content-Type": "application/json" },
+    body: JSON.stringify({
+      message: message || `delete ${path}`,
+      sha: existing.sha,
+    }),
+  });
+  if (!res.ok && res.status !== 404) {
+    const t = await res.text();
+    throw new Error(`GitHub DELETE ${res.status}: ${t}`);
+  }
+  return true;
 }
 
 export async function available() {

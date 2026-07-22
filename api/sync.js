@@ -32,21 +32,39 @@ export default async function handler(req, res) {
     }
 
     if (req.method === "POST") {
-      const incoming = req.body?.deals || {};
+      let body = req.body;
+      if (typeof body === "string") {
+        try {
+          body = JSON.parse(body);
+        } catch {
+          body = {};
+        }
+      }
+      const incoming = body?.deals || {};
       const existing = (await getJson(path)) || { accountId, deals: {} };
       const merged = { ...existing.deals };
       for (const [id, deal] of Object.entries(incoming)) {
         const prev = merged[id];
-        if (!prev || (deal.createdAt || 0) >= (prev.createdAt || 0)) {
+        const incomingTs = Math.max(deal.createdAt || 0, deal.deletedAt || 0);
+        const prevTs = Math.max(prev?.createdAt || 0, prev?.deletedAt || 0);
+        if (!prev || incomingTs >= prevTs) {
           merged[id] = deal;
         }
       }
-      // Cap
-      const ids = Object.keys(merged).sort(
-        (a, b) => (merged[b].createdAt || 0) - (merged[a].createdAt || 0)
-      );
-      while (ids.length > 50) delete merged[ids.pop()];
-      const record = { accountId, deals: merged, updatedAt: Date.now() };
+      // Drop old tombstones, cap live deals
+      const live = Object.entries(merged).filter(([, d]) => d && !d.deleted);
+      const tombs = Object.entries(merged).filter(([, d]) => d?.deleted);
+      live.sort((a, b) => (b[1].createdAt || 0) - (a[1].createdAt || 0));
+      tombs.sort((a, b) => (b[1].deletedAt || 0) - (a[1].deletedAt || 0));
+      const kept = {};
+      for (const [id, d] of live.slice(0, 50)) kept[id] = d;
+      for (const [id, d] of tombs.slice(0, 20)) kept[id] = d;
+      const record = {
+        accountId,
+        clerkUserId: body?.clerkUserId || existing.clerkUserId || null,
+        deals: kept,
+        updatedAt: Date.now(),
+      };
       await putJson(path, record, `sync ${accountId}`);
       return res.status(200).json(record);
     }

@@ -1,10 +1,13 @@
 import {
   uid,
   saveDeal,
+  deleteDeal,
   recentDeals,
   shareUrl,
   clientAllowRequest,
   getCurrentDeal,
+  getEvalCache,
+  setEvalCache,
 } from "./store.js";
 import {
   getBands,
@@ -15,6 +18,8 @@ import {
   scoreColor,
   applyFeedback,
   verdictFromTrue,
+  whyCount,
+  bandsForTrait,
 } from "./hilo.js";
 import {
   getAccount,
@@ -22,6 +27,7 @@ import {
   pullSync,
   pushSync,
   createServerShare,
+  revokeServerShare,
   initClerk,
 } from "./auth.js";
 import { track, hydrateBandsFromTelemetry } from "./telemetry.js";
@@ -156,16 +162,48 @@ function renderHistory() {
           const n = d.items?.length || 0;
           const when = new Date(d.createdAt || Date.now()).toLocaleDateString();
           const word = d.verdict?.word || "—";
-          return `<a class="hist-chip" href="/crosswalk?id=${encodeURIComponent(d.id)}">${escapeHtml(word)} · ${n} cards · ${when}</a>`;
+          return `<span class="hist-item">
+            <a class="hist-chip" href="/crosswalk?id=${encodeURIComponent(d.id)}">${escapeHtml(word)} · ${n} cards · ${when}</a>
+            <button type="button" class="hist-del" data-id="${escapeHtml(d.id)}" aria-label="Delete shoe" title="Delete">×</button>
+          </span>`;
         })
         .join("")}
     </div>`;
+}
+
+historyEl?.addEventListener("click", (e) => {
+  const btn = e.target.closest(".hist-del");
+  if (!btn) return;
+  e.preventDefault();
+  const id = btn.getAttribute("data-id");
+  if (!id || !confirm("Delete this shoe from your history?")) return;
+  deleteDeal(id);
+  renderHistory();
+  track("deal_delete");
+  pushSync().catch(() => {});
+});
+
+async function hashKey(str) {
+  const buf = await crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(str)
+  );
+  return Array.from(new Uint8Array(buf))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("")
+    .slice(0, 32);
 }
 
 async function callEvaluate(content, mode) {
   const gate = clientAllowRequest(30);
   if (!gate.ok) {
     throw new Error(`Client rate limit — try again in ~${gate.retryInMin} min.`);
+  }
+  let cacheKey = null;
+  if (mode === "score" && Array.isArray(content) && !content.some((b) => b.type === "image")) {
+    cacheKey = await hashKey(JSON.stringify({ mode, content }));
+    const cached = getEvalCache(cacheKey);
+    if (cached) return cached;
   }
   const res = await fetch("/api/evaluate", {
     method: "POST",
@@ -189,6 +227,7 @@ async function callEvaluate(content, mode) {
     .map((b) => b.text)
     .join("");
   text = text.replace(/```json|```/g, "").trim();
+  if (cacheKey) setEvalCache(cacheKey, text);
   return text;
 }
 
@@ -257,6 +296,32 @@ function openCrop(img, name) {
   drawCrop();
 }
 
+const HANDLE = 14;
+const MIN_CROP = 48;
+
+function cropHandles(s) {
+  const { x, y, w, h } = s;
+  return {
+    nw: { x: x, y: y },
+    ne: { x: x + w, y: y },
+    sw: { x: x, y: y + h },
+    se: { x: x + w, y: y + h },
+    n: { x: x + w / 2, y: y },
+    s: { x: x + w / 2, y: y + h },
+    e: { x: x + w, y: y + h / 2 },
+    w: { x: x, y: y + h / 2 },
+  };
+}
+
+function hitCropHandle(px, py, s) {
+  const hs = cropHandles(s);
+  for (const [name, p] of Object.entries(hs)) {
+    if (Math.abs(px - p.x) <= HANDLE && Math.abs(py - p.y) <= HANDLE) return name;
+  }
+  if (px >= s.x && px <= s.x + s.w && py >= s.y && py <= s.y + s.h) return "move";
+  return null;
+}
+
 function drawCrop() {
   const { img } = pendingFullImage;
   const s = cropState;
@@ -279,6 +344,11 @@ function drawCrop() {
   ctx.strokeStyle = "#c3e600";
   ctx.lineWidth = 2;
   ctx.strokeRect(s.x, s.y, s.w, s.h);
+  const hs = cropHandles(s);
+  ctx.fillStyle = "#c3e600";
+  for (const p of Object.values(hs)) {
+    ctx.fillRect(p.x - 5, p.y - 5, 10, 10);
+  }
 }
 
 function loadImageFile(file) {
@@ -299,18 +369,76 @@ function loadImageFile(file) {
 cropCanvas?.addEventListener("pointerdown", (e) => {
   if (!cropState) return;
   const r = cropCanvas.getBoundingClientRect();
-  const x = e.clientX - r.left;
-  const y = e.clientY - r.top;
-  cropState.drag = { ox: x - cropState.x, oy: y - cropState.y };
+  const scaleX = cropCanvas.width / r.width;
+  const scaleY = cropCanvas.height / r.height;
+  const x = (e.clientX - r.left) * scaleX;
+  const y = (e.clientY - r.top) * scaleY;
+  const mode = hitCropHandle(x, y, cropState);
+  if (!mode) return;
+  cropState.drag = {
+    mode,
+    startX: x,
+    startY: y,
+    ox: cropState.x,
+    oy: cropState.y,
+    ow: cropState.w,
+    oh: cropState.h,
+  };
   cropCanvas.setPointerCapture(e.pointerId);
 });
 cropCanvas?.addEventListener("pointermove", (e) => {
-  if (!cropState?.drag) return;
+  if (!cropState) return;
   const r = cropCanvas.getBoundingClientRect();
-  const x = e.clientX - r.left;
-  const y = e.clientY - r.top;
-  cropState.x = Math.max(0, Math.min(cropCanvas.width - cropState.w, x - cropState.drag.ox));
-  cropState.y = Math.max(0, Math.min(cropCanvas.height - cropState.h, y - cropState.drag.oy));
+  const scaleX = cropCanvas.width / r.width;
+  const scaleY = cropCanvas.height / r.height;
+  const x = (e.clientX - r.left) * scaleX;
+  const y = (e.clientY - r.top) * scaleY;
+  if (!cropState.drag) {
+    const hit = hitCropHandle(x, y, cropState);
+    const cursors = {
+      nw: "nwse-resize",
+      se: "nwse-resize",
+      ne: "nesw-resize",
+      sw: "nesw-resize",
+      n: "ns-resize",
+      s: "ns-resize",
+      e: "ew-resize",
+      w: "ew-resize",
+      move: "grab",
+    };
+    cropCanvas.style.cursor = cursors[hit] || "crosshair";
+    return;
+  }
+  const d = cropState.drag;
+  const dx = x - d.startX;
+  const dy = y - d.startY;
+  const maxW = cropCanvas.width;
+  const maxH = cropCanvas.height;
+  if (d.mode === "move") {
+    cropState.x = Math.max(0, Math.min(maxW - cropState.w, d.ox + dx));
+    cropState.y = Math.max(0, Math.min(maxH - cropState.h, d.oy + dy));
+  } else {
+    let nx = d.ox;
+    let ny = d.oy;
+    let nw = d.ow;
+    let nh = d.oh;
+    if (d.mode.includes("e")) nw = Math.max(MIN_CROP, Math.min(maxW - d.ox, d.ow + dx));
+    if (d.mode.includes("s")) nh = Math.max(MIN_CROP, Math.min(maxH - d.oy, d.oh + dy));
+    if (d.mode.includes("w")) {
+      const right = d.ox + d.ow;
+      nx = Math.max(0, Math.min(right - MIN_CROP, d.ox + dx));
+      nw = right - nx;
+    }
+    if (d.mode.includes("n")) {
+      const bottom = d.oy + d.oh;
+      ny = Math.max(0, Math.min(bottom - MIN_CROP, d.oy + dy));
+      nh = bottom - ny;
+    }
+    cropState.x = nx;
+    cropState.y = ny;
+    cropState.w = nw;
+    cropState.h = nh;
+  }
   drawCrop();
 });
 cropCanvas?.addEventListener("pointerup", () => {
@@ -608,32 +736,60 @@ function finishDeal(items) {
   pager1.style.display = "flex";
   const link = document.getElementById("toPage2");
   if (link) link.href = `/crosswalk?id=${encodeURIComponent(deal.id)}`;
-  if (shareBtn) {
-    shareBtn.style.display = "inline-block";
-    shareBtn.onclick = async () => {
-      shareBtn.textContent = "Creating link…";
-      try {
-        const server = await createServerShare(deal);
-        const url = server.url.startsWith("http")
-          ? server.url
-          : location.origin + server.url;
-        await navigator.clipboard.writeText(url);
-        shareBtn.textContent = "Short link copied";
-        track("share_server");
-      } catch {
-        const url = shareUrl(deal);
-        try {
-          await navigator.clipboard.writeText(url);
-        } catch {
-          prompt("Copy share link:", url);
-        }
-        shareBtn.textContent = "Fallback link copied";
-        track("share_fallback");
-      }
-      setTimeout(() => (shareBtn.textContent = "Copy share link"), 1800);
-    };
+  const compareLink = document.getElementById("compareDealBtn");
+  if (compareLink) {
+    compareLink.style.display = "inline-block";
+    compareLink.href = `/compare?a=${encodeURIComponent(deal.id)}`;
   }
+  wireShareButton(deal);
   pushSync().catch(() => {});
+}
+
+function wireShareButton(deal) {
+  if (!shareBtn) return;
+  shareBtn.style.display = "inline-block";
+  shareBtn.onclick = async () => {
+    shareBtn.textContent = "Creating link…";
+    try {
+      const server = await createServerShare(deal, 30);
+      deal.shareId = server.id;
+      deal.shareExpiresAt = server.expiresAt;
+      saveDeal(deal);
+      lastDeal = deal;
+      const url = server.url.startsWith("http")
+        ? server.url
+        : location.origin + server.url;
+      await navigator.clipboard.writeText(url);
+      shareBtn.textContent = "Short link copied";
+      const revoke = document.getElementById("revokeShareBtn");
+      if (revoke) {
+        revoke.style.display = "inline-block";
+        revoke.onclick = async () => {
+          if (!deal.shareId || !confirm("Revoke this short link?")) return;
+          try {
+            await revokeServerShare(deal.shareId);
+            deal.shareId = null;
+            saveDeal(deal);
+            revoke.style.display = "none";
+            track("share_revoke");
+          } catch (e) {
+            showErr(e.message || "Could not revoke");
+          }
+        };
+      }
+      track("share_server");
+    } catch {
+      const url = shareUrl(deal);
+      try {
+        await navigator.clipboard.writeText(url);
+      } catch {
+        prompt("Copy share link:", url);
+      }
+      shareBtn.textContent = "Fallback link copied";
+      track("share_fallback");
+    }
+    setTimeout(() => (shareBtn.textContent = "Copy share link"), 1800);
+  };
 }
 
 /* ---------- animated shoe ---------- */
@@ -679,6 +835,7 @@ function dealAnimated(items, deal) {
     const runText = fmtCount(running).replace("-", "−");
     const tcText = (tc > 0 ? "+" : "") + tc.toFixed(1);
 
+    const why = whyCount(it, bandsForTrait(it.trait));
     const el = document.createElement("div");
     el.className = "verdict deal-in";
     el.innerHTML = `
@@ -692,6 +849,7 @@ function dealAnimated(items, deal) {
       </div>
       <div class="vbody">
         <div class="signal">${escapeHtml(it.signal)}</div>
+        <div class="why-count">${escapeHtml(why)}</div>
         <div class="tags">${(it.tags || []).map((t) => `<span class="tag">${escapeHtml(t)}</span>`).join("")}</div>
       </div>
       <div class="running">
@@ -704,18 +862,33 @@ function dealAnimated(items, deal) {
         <button type="button" class="fb-btn" data-agree="1" aria-label="Agree">👍</button>
         <button type="button" class="fb-btn" data-agree="0" aria-label="Disagree">👎</button>
       </div>
-      ${it.upgrade ? `<div class="glow"><b>Stronger version:</b> ${escapeHtml(it.upgrade)}</div>` : ""}`;
+      ${
+        it.upgrade
+          ? `<div class="glow">
+              <b>Stronger version:</b> ${escapeHtml(it.upgrade)}
+              <button type="button" class="upgrade-btn" data-idx="${idx}">Deal this upgrade →</button>
+            </div>`
+          : ""
+      }`;
     results.appendChild(el);
 
     el.querySelectorAll(".fb-btn").forEach((btn) => {
       btn.addEventListener("click", () => {
         const agree = btn.dataset.agree === "1";
         applyFeedback(it, agree);
-        track(agree ? "thumb_up" : "thumb_down", { score: it.score });
+        track(agree ? "thumb_up" : "thumb_down", {
+          score: it.score,
+          trait: it.trait,
+        });
         updateBandsLabel();
         el.querySelector(".feedback").innerHTML =
-          '<span class="fb-label">Thanks — bands updated</span>';
+          '<span class="fb-label">Thanks — bands + trait memory updated</span>';
       });
+    });
+
+    el.querySelector(".upgrade-btn")?.addEventListener("click", async () => {
+      const i = Number(el.querySelector(".upgrade-btn").dataset.idx);
+      await redealWithUpgrade(deal, i);
     });
 
     document.getElementById("shoeCards").textContent = `${dealt} / ${shoeSize}`;
@@ -842,9 +1015,57 @@ input.addEventListener("keydown", (e) => {
   if ((e.metaKey || e.ctrlKey) && e.key === "Enter") evaluate();
 });
 
-function refreshAccountUI() {
+function refreshAccountUI(clerk) {
   const account = getAccount();
   if (recoveryCodeEl) recoveryCodeEl.textContent = account.recovery;
+  const note = document.getElementById("accountNote");
+  if (note) {
+    if (clerk?.user || account.clerkEmail) {
+      note.textContent = `Signed in${account.clerkEmail ? " · " + account.clerkEmail : ""} · recovery still backs up sync`;
+    } else {
+      note.textContent = "Account · syncs shoes across devices";
+    }
+  }
+  if (clerkBtn) {
+    clerkBtn.textContent = clerk?.user ? "Sign out" : "Sign in";
+  }
+}
+
+async function redealWithUpgrade(deal, idx) {
+  if (!deal?.items?.[idx]?.upgrade) return;
+  const nextTraits = deal.items.map((it, i) =>
+    i === idx ? it.upgrade : it.trait
+  );
+  statusEl.textContent = "Re-dealing with upgrade…";
+  statusEl.classList.add("show");
+  results.innerHTML = "";
+  if (dealTimer) {
+    clearTimeout(dealTimer);
+    dealTimer = null;
+  }
+  try {
+    const parsed = await scoreTraits(nextTraits);
+    track("upgrade_redeal", { idx });
+    finishDeal(parsed);
+  } catch (e) {
+    showErr(e.message || "Could not re-deal upgrade");
+  } finally {
+    statusEl.classList.remove("show");
+  }
+}
+
+async function runDemoDeal() {
+  clearErr();
+  const traits = DEMO_CROSSWALK.map((d) => d.trait);
+  input.value = traits.join("\n");
+  try {
+    // Prefer live score; fall back to bundled demo items offline.
+    const parsed = await scoreTraits(traits);
+    finishDeal(parsed);
+  } catch {
+    finishDeal(DEMO_CROSSWALK.map((it) => normalizeItem(it)));
+  }
+  track("demo_deal");
 }
 
 syncBtn?.addEventListener("click", async () => {
@@ -881,10 +1102,33 @@ restoreBtn?.addEventListener("click", async () => {
   }
 });
 
-// Share-target / deep link text
+// Share-target / deep link text + PWA image shares
 const params = new URLSearchParams(location.search);
 const sharedText = params.get("text") || params.get("title");
 if (sharedText && !input.value) input.value = sharedText;
+
+async function consumeSharedImage() {
+  const key = params.get("share") || sessionStorage.getItem("profileRead.pendingShare");
+  if (!key) return;
+  sessionStorage.removeItem("profileRead.pendingShare");
+  try {
+    const cache = await caches.open("profile-read-shares");
+    const res = await cache.match(new Request("/__share__/" + key));
+    if (!res) return;
+    const blob = await res.blob();
+    const name = res.headers.get("X-Share-Name") || "shared.jpg";
+    const file = new File([blob], name, { type: blob.type || "image/jpeg" });
+    loadImageFile(file);
+    await cache.delete(new Request("/__share__/" + key));
+    const clean = new URL(location.href);
+    clean.searchParams.delete("share");
+    history.replaceState({}, "", clean.pathname + clean.search + (location.hash || "#deal"));
+    track("share_target_image");
+  } catch {
+    /* ignore */
+  }
+}
+consumeSharedImage();
 
 refreshAccountUI();
 updateBandsLabel();
@@ -897,15 +1141,54 @@ fetch("/api/config")
   .then(async (cfg) => {
     if (cfg.clerkPublishableKey && clerkBtn) {
       clerkBtn.style.display = "inline-block";
-      const clerk = await initClerk(cfg.clerkPublishableKey);
-      clerkBtn.onclick = () => {
+      const clerk = await initClerk(cfg.clerkPublishableKey, {
+        onChange: (c) => {
+          refreshAccountUI(c);
+          if (c?.user) pushSync().catch(() => {});
+        },
+      });
+      refreshAccountUI(clerk);
+      clerkBtn.onclick = async () => {
         if (!clerk) return;
-        if (clerk.user) clerk.signOut();
-        else clerk.openSignIn();
+        if (clerk.user) {
+          await clerk.signOut();
+          refreshAccountUI(clerk);
+        } else {
+          await clerk.openSignIn();
+        }
       };
+    } else if (clerkBtn) {
+      clerkBtn.style.display = "none";
     }
   })
   .catch(() => {});
+
+// Demo deep link: /?demo=1 or /#demo
+const wantDemo =
+  params.get("demo") === "1" ||
+  params.get("demo") === "true" ||
+  location.hash === "#demo";
+if (wantDemo) {
+  runDemoDeal();
+}
+
+// Crosswalk → deal upgrade handoff
+if (params.get("redeal") === "1") {
+  try {
+    const pending = JSON.parse(
+      sessionStorage.getItem("profileRead.pendingUpgrade") || "null"
+    );
+    sessionStorage.removeItem("profileRead.pendingUpgrade");
+    if (pending?.traits?.length) {
+      input.value = pending.traits.join("\n");
+      scoreTraits(pending.traits)
+        .then((parsed) => finishDeal(parsed))
+        .catch(() => showErr("Could not re-deal that upgrade."));
+    }
+  } catch {
+    /* ignore */
+  }
+}
 
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").catch(() => {});

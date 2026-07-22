@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Demo · Profile Read</title>
+<meta name="description" content="Cold-traffic demo of Profile Read — deal a sample shoe, see HIT / STAND / BUST, open the crosswalk.">
+<meta property="og:title" content="Profile Read — live demo">
+<meta property="og:description" content="Deal dating-profile traits like a blackjack shoe.">
+<meta property="og:image" content="/api/og?word=HIT&tc=%2B1.4&sub=Demo%20shoe%20·%204%20cards">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="theme-color" content="#5b2a86">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,900&family=Space+Grotesk:wght@400;700&family=Space+Mono&display=swap" rel="stylesheet">
+<style>
+  :root{--ink:#171310;--paper:#f6efe4;--card:#fffdf8;--plum:#5b2a86;--lime:#c3e600;--coral:#ff5c49;--muted:#7a6f60}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{
+    min-height:100vh;font-family:'Space Grotesk',system-ui,sans-serif;color:var(--ink);
+    background:
+      radial-gradient(ellipse 80% 50% at 10% 0%, #efe2c8 0%, transparent 55%),
+      radial-gradient(ellipse 60% 40% at 100% 100%, #ddd0f0 0%, transparent 50%),
+      var(--paper);
+    padding:clamp(20px,5vw,48px);
+  }
+  .wrap{max-width:720px;margin:0 auto}
+  .eyebrow{font-family:'Space Mono',monospace;font-size:12px;letter-spacing:.2em;text-transform:uppercase;color:var(--plum);margin-bottom:12px}
+  h1{font-family:'Fraunces',serif;font-weight:900;font-size:clamp(40px,9vw,64px);line-height:.95;margin-bottom:14px}
+  h1 em{font-style:italic;color:var(--plum)}
+  .sub{color:var(--muted);max-width:42ch;margin-bottom:28px;font-size:17px;line-height:1.45}
+  .cta{display:flex;flex-wrap:wrap;gap:12px;margin-bottom:36px}
+  .cta a{
+    display:inline-block;border:1.5px solid var(--ink);padding:14px 20px;font-weight:700;
+    text-decoration:none;color:var(--ink);box-shadow:4px 4px 0 var(--ink);
+  }
+  .cta a.primary{background:var(--lime)}
+  .cta a.ghost{background:var(--card)}
+  .shots{display:grid;gap:14px}
+  .shot{
+    border:1.5px solid var(--ink);background:var(--ink);color:var(--card);padding:22px;
+    min-height:160px;position:relative;overflow:hidden;
+  }
+  .shot .label{font-family:'Space Mono',monospace;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:#b6ab99;margin-bottom:10px}
+  .shot .big{font-family:'Fraunces',serif;font-weight:900;font-size:clamp(42px,8vw,72px);color:var(--lime);line-height:1}
+  .shot.bust .big{color:var(--coral)}
+  .shot .meta{margin-top:10px;font-family:'Space Mono',monospace;font-size:13px;color:#b6ab99}
+  .shot .bar{margin-top:18px;height:6px;width:120px;background:var(--lime)}
+  .shot.bust .bar{background:var(--coral)}
+  footer{margin-top:36px;font-family:'Space Mono',monospace;font-size:11px;color:var(--muted)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="eyebrow">Profile Read · demo</div>
+  <h1>Deal a sample <em>shoe</em></h1>
+  <p class="sub">Cold-traffic entry: run the live demo deal, then open the crosswalk or compare. Use these frames for store / social screenshots.</p>
+  <div class="cta">
+    <a class="primary" href="/?demo=1#deal">Run live demo →</a>
+    <a class="ghost" href="/crosswalk">Crosswalk</a>
+    <a class="ghost" href="/compare">Compare</a>
+    <a class="ghost" href="/">Home</a>
+  </div>
+  <div class="shots" aria-label="Screenshot frames">
+    <div class="shot">
+      <div class="label">Frame 01 · verdict</div>
+      <div class="big">HIT</div>
+      <div class="meta">True count +1.4 · 4 cards · rich shoe</div>
+      <div class="bar"></div>
+    </div>
+    <div class="shot bust">
+      <div class="label">Frame 02 · thin shoe</div>
+      <div class="big">BUST</div>
+      <div class="meta">True count −1.8 · clichés dominate</div>
+      <div class="bar"></div>
+    </div>
+    <div class="shot">
+      <div class="label">Frame 03 · share preview</div>
+      <div class="big" style="font-size:clamp(28px,5vw,40px);color:#f6efe4">OG · /api/og</div>
+      <div class="meta">Dynamic cards for /s/:id — verdict + true count</div>
+      <div class="bar"></div>
+    </div>
+  </div>
+  <footer>Screenshot this page or the live demo deal for install / store listings.</footer>
+</div>
+</body>
+</html>

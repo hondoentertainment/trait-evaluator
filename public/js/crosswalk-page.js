@@ -3,6 +3,7 @@ import {
   getCurrentDeal,
   fromShareParam,
   saveDeal,
+  deleteDeal,
   shareUrl,
   recentDeals,
   uid,
@@ -14,8 +15,15 @@ import {
   scoreColor,
   normalizeItem,
   applyFeedback,
+  whyCount,
+  bandsForTrait,
 } from "./hilo.js";
-import { createServerShare, loadServerShare } from "./auth.js";
+import {
+  createServerShare,
+  loadServerShare,
+  revokeServerShare,
+  pushSync,
+} from "./auth.js";
 import { track } from "./telemetry.js";
 
 const DEMO = [
@@ -53,7 +61,10 @@ const crosswalkEl = document.getElementById("crosswalk");
 const pageMeta = document.getElementById("pageMeta");
 const bandsEl = document.getElementById("bandsLive");
 const shareBtn = document.getElementById("shareBtn");
+const revokeBtn = document.getElementById("revokeShareBtn");
+const compareBtn = document.getElementById("compareBtn");
 const historyEl = document.getElementById("history");
+let activeShareId = null;
 
 function escapeHtml(s) {
   return String(s).replace(
@@ -69,8 +80,14 @@ async function resolveDeal() {
   if (sid) {
     const server = await loadServerShare(sid);
     if (server?.items?.length) {
+      activeShareId = sid;
       server.items = server.items.map((it) => normalizeItem(it));
-      const saved = saveDeal(server);
+      const saved = saveDeal({
+        ...server,
+        id: server.id || uid(),
+        shareId: sid,
+        fromShare: sid,
+      });
       history.replaceState({}, "", `/crosswalk?id=${encodeURIComponent(saved.id)}`);
       return saved;
     }
@@ -121,11 +138,33 @@ function renderHistory(activeId) {
           const n = d.items?.length || 0;
           const cls = d.id === activeId ? "hist-chip on" : "hist-chip";
           const word = d.verdict?.word || (d.demo ? "DEMO" : "—");
-          return `<a class="${cls}" href="/crosswalk?id=${encodeURIComponent(d.id)}">${escapeHtml(word)} · ${n}</a>`;
+          return `<span class="hist-item">
+            <a class="${cls}" href="/crosswalk?id=${encodeURIComponent(d.id)}">${escapeHtml(word)} · ${n}</a>
+            <button type="button" class="hist-del" data-id="${escapeHtml(d.id)}" aria-label="Delete shoe" title="Delete">×</button>
+          </span>`;
         })
         .join("")}
     </div>`;
 }
+
+historyEl?.addEventListener("click", async (e) => {
+  const btn = e.target.closest(".hist-del");
+  if (!btn) return;
+  e.preventDefault();
+  const id = btn.getAttribute("data-id");
+  if (!id || !confirm("Delete this shoe from your history?")) return;
+  deleteDeal(id);
+  track("deal_delete");
+  try {
+    await pushSync();
+  } catch {
+    /* offline ok */
+  }
+  const next = recentDeals(1)[0];
+  location.href = next
+    ? `/crosswalk?id=${encodeURIComponent(next.id)}`
+    : "/#deal";
+});
 
 function renderCrosswalk(deal) {
   const items = (deal.items || []).map((it) => normalizeItem(it));
@@ -155,15 +194,20 @@ function renderCrosswalk(deal) {
       const tags = (it.tags || [])
         .map((t) => `<span class="tag">${escapeHtml(String(t))}</span>`)
         .join("");
+      const why = whyCount(it, bandsForTrait(it.trait));
       return `<tr data-idx="${idx}">
       <td class="c-num">${idx + 1}</td>
       <td class="c-trait">${escapeHtml(it.trait)}</td>
       <td class="c-score"><span style="background:${scoreColor(it.score)}">${it.score}</span></td>
-      <td class="c-count"><span class="count-val ${cvClass}">${cvText}</span></td>
+      <td class="c-count"><span class="count-val ${cvClass}">${cvText}</span><div class="why-count">${escapeHtml(why)}</div></td>
       <td class="c-run">${runText}</td>
       <td class="c-tags"><div class="tags">${tags || "—"}</div></td>
       <td class="c-signal">${escapeHtml(it.signal) || "—"}</td>
-      <td class="c-upgrade">${escapeHtml(it.upgrade) || "—"}</td>
+      <td class="c-upgrade">${
+        it.upgrade
+          ? `${escapeHtml(it.upgrade)}<br><button type="button" class="upgrade-btn" data-idx="${idx}">Deal upgrade →</button>`
+          : "—"
+      }</td>
       <td class="c-fb">
         <button type="button" class="fb-btn" data-agree="1" title="Agree">👍</button>
         <button type="button" class="fb-btn" data-agree="0" title="Disagree">👎</button>
@@ -221,23 +265,81 @@ function renderCrosswalk(deal) {
       const tr = btn.closest("tr");
       const idx = Number(tr.dataset.idx);
       applyFeedback(items[idx], btn.dataset.agree === "1");
-      // Re-normalize counts with new bands and re-render
+      track(btn.dataset.agree === "1" ? "thumb_up" : "thumb_down", {
+        score: items[idx].score,
+        trait: items[idx].trait,
+      });
       deal.items = items.map((it) => normalizeItem(it));
       saveDeal(deal);
       renderCrosswalk(deal);
     });
   });
 
+  crosswalkEl.querySelectorAll(".upgrade-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const idx = Number(btn.dataset.idx);
+      const upgrade = items[idx]?.upgrade;
+      if (!upgrade) return;
+      sessionStorage.setItem(
+        "profileRead.pendingUpgrade",
+        JSON.stringify({
+          traits: items.map((it, i) => (i === idx ? upgrade : it.trait)),
+        })
+      );
+      track("upgrade_redeal", { idx, from: "crosswalk" });
+      location.href = "/?redeal=1#deal";
+    });
+  });
+
+  if (compareBtn) {
+    const sid = activeShareId || deal.shareId || deal.fromShare;
+    compareBtn.href = sid
+      ? `/compare?asid=${encodeURIComponent(sid)}`
+      : `/compare?a=${encodeURIComponent(deal.id)}`;
+    compareBtn.style.display = "inline-block";
+  }
+
+  if (revokeBtn) {
+    const sid = activeShareId || deal.shareId;
+    if (sid) {
+      revokeBtn.style.display = "inline-block";
+      revokeBtn.onclick = async () => {
+        if (!confirm("Revoke this short link? Anyone with it will get a dead end.")) return;
+        try {
+          await revokeServerShare(sid);
+          deal.shareId = null;
+          activeShareId = null;
+          saveDeal(deal);
+          revokeBtn.style.display = "none";
+          track("share_revoke");
+          alert("Link revoked.");
+        } catch (e) {
+          alert(e.message || "Could not revoke");
+        }
+      };
+    } else {
+      revokeBtn.style.display = "none";
+    }
+  }
+
   if (shareBtn) {
     shareBtn.onclick = async () => {
       shareBtn.textContent = "Creating link…";
       try {
-        const server = await createServerShare(deal);
+        const server = await createServerShare(deal, 30);
+        deal.shareId = server.id;
+        deal.shareExpiresAt = server.expiresAt;
+        activeShareId = server.id;
+        saveDeal(deal);
         const url = server.url.startsWith("http")
           ? server.url
           : location.origin + server.url;
         await navigator.clipboard.writeText(url);
         shareBtn.textContent = "Short link copied";
+        if (revokeBtn) revokeBtn.style.display = "inline-block";
+        if (compareBtn) {
+          compareBtn.href = `/compare?asid=${encodeURIComponent(server.id)}`;
+        }
         track("share_server");
       } catch {
         const url = shareUrl(deal);
@@ -253,6 +355,14 @@ function renderCrosswalk(deal) {
   }
 
   document.title = `Crosswalk · TC ${tcNum} · Profile Read`;
+  // Dynamic social preview for this view
+  let og = document.querySelector('meta[property="og:title"]');
+  if (!og) {
+    og = document.createElement("meta");
+    og.setAttribute("property", "og:title");
+    document.head.appendChild(og);
+  }
+  og.setAttribute("content", `TC ${tcNum} · Profile Read crosswalk`);
 }
 
 const deal = await resolveDeal();
