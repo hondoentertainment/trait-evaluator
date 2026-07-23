@@ -89,6 +89,7 @@ export default async function handler(req, res) {
         expiresAt: createdAt + (Number.isFinite(ttl) ? ttl : DEFAULT_TTL_MS),
         items: deal.items.slice(0, 12),
         verdict: deal.verdict || null,
+        name: deal.name ? String(deal.name).slice(0, 48) : null,
         accountId: deal.accountId || null,
       };
       await putJson(`shares/${id}.json`, record, `share ${id}`);

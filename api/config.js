@@ -22,6 +22,10 @@ export default async function handler(req, res) {
       photoScore: true,
       demo: true,
       clerk: Boolean(process.env.CLERK_PUBLISHABLE_KEY),
+      admin: Boolean(process.env.ADMIN_SECRET),
+      dealCap: true,
+      webShare: true,
+      exportPng: true,
     },
   });
 }

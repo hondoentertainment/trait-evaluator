@@ -3,31 +3,28 @@
 Deal dating-profile traits like a blackjack shoe — Hi-Lo running count, true
 count, **HIT / STAND / BUST** — then open a shareable value crosswalk.
 
-Powered by Grok via Vercel AI Gateway. Deals sync through a private GitHub data
-repo (`DATA_REPO` + `GITHUB_TOKEN`).
+**Live:** https://trait-evaluator.vercel.app  
+**Demo (pin this):** https://trait-evaluator.vercel.app/demo
 
 ## Pages
 
 | Path | Purpose |
 |------|---------|
-| `/` | Home showcase + shoe dealer (crop → OCR → edit → animated deal) |
-| `/crosswalk` | Value grid (`?id=`, `?d=`, `?sid=`) |
-| `/compare` | Head-to-head (`?a=&b=`, `?asid=&bsid=`) + trait Δ |
-| `/demo` | Cold-traffic demo + screenshot frames |
-| `/s/:id` | Short share (bot OG HTML → crosswalk; humans 302) |
-| `/?demo=1` | Auto-deal a sample shoe |
+| `/` | Home + dealer (`?demo=1` auto-deal) |
+| `/crosswalk` | Value grid + PNG export |
+| `/compare` | Head-to-head + trait Δ |
+| `/landing?sid=` | Verdict-first share landing |
+| `/demo` | Cold-traffic / screenshot frames |
+| `/admin` | Telemetry ops (needs `ADMIN_SECRET`) |
+| `/s/:id` | Short share → landing (bots get OG) |
 
 ## Features
 
-- **Accounts** — recovery-code sync; optional Clerk when `CLERK_PUBLISHABLE_KEY` is set
-- **Short shares** — `/s/abc123`, 30-day expiry, revocable, dynamic OG (`/api/og`)
-- **OCR loop** — crop + resize handles, confidence chips, re-OCR, edit before deal
-- **Photo vibe** — optional second pass; OCR uses low image detail (cheaper tier)
-- **Deal quality** — why-count chips, per-trait thumb memory, “deal this upgrade”
-- **Compare** — Δ running / true + trait table; CTA from crosswalk
-- **PWA** — installable, offline shell, image share-target
-- **Cost controls** — client + server evaluate cache (text scores), rate limits
-- **Telemetry** — anonymous events tune global Hi-Lo band suggestions
+- Named shoes, Web Share, PWA install prompt, daily free-deal cap (12)
+- Edit & re-score without full OCR; upgrade re-deal; why-count chips
+- Short shares with expiry/revoke + dynamic OG
+- Evaluate cache + OCR/score tiers
+- A/B home copy (`profileRead.ab.v1`)
 
 ## Setup
 
@@ -35,24 +32,37 @@ repo (`DATA_REPO` + `GITHUB_TOKEN`).
 vercel link
 vercel env pull .env.local
 vercel dev
+npm run smoke
 ```
 
-Required env (see `.env.example`):
+### Env
 
-- `GITHUB_TOKEN` — fine-grained PAT with contents:write on the data repo (rotate if leaked)
-- `DATA_REPO` — e.g. `hondoentertainment/profileread-data`
-- AI Gateway OIDC (automatic on Vercel) or `AI_GATEWAY_API_KEY` / `XAI_API_KEY`
+| Var | Required | Notes |
+|-----|----------|-------|
+| `GITHUB_TOKEN` | yes | Fine-grained PAT; rotate if exposed |
+| `DATA_REPO` | yes | e.g. `hondoentertainment/profileread-data` |
+| AI Gateway / `XAI_API_KEY` | yes | OIDC on Vercel, or xAI key |
+| `CLERK_PUBLISHABLE_KEY` | no | Enables Sign in |
+| `ADMIN_SECRET` | no | Locks `/api/admin` |
 
-Optional:
+### Custom domain
 
-- `CLERK_PUBLISHABLE_KEY` — enables Sign in on the home account bar
-- Custom domain — Vercel → Project → Settings → Domains (not required for app function)
+`profileread.app` is available (~$9.99/yr on Vercel). Purchase + attach:
+
+https://vercel.com/domains/search?q=profileread.app
+
+Then Project → Settings → Domains.
+
+### Clerk
+
+1. Create app at https://dashboard.clerk.com (or Vercel Marketplace → Clerk)  
+2. Copy publishable key → `vercel env add CLERK_PUBLISHABLE_KEY`  
+3. Redeploy — Sign in appears on the home account bar.
 
 ## Deploy
 
 ```bash
 git push
 npx vercel deploy --prod --yes
+npm run smoke
 ```
-
-Live: https://trait-evaluator.vercel.app

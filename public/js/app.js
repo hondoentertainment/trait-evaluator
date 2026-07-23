@@ -8,7 +8,20 @@ import {
   getCurrentDeal,
   getEvalCache,
   setEvalCache,
+  dealCapStatus,
+  consumeDealCap,
+  renameDeal,
+  dealLabel,
+  getAbBucket,
+  shouldShowInstallPrompt,
+  markInstallPrompted,
 } from "./store.js";
+import {
+  shareLink,
+  bindInstallCapture,
+  hasInstallPrompt,
+  promptInstall,
+} from "./native-share.js";
 import {
   getBands,
   normalizeItem,
@@ -160,10 +173,10 @@ function renderHistory() {
       ${list
         .map((d) => {
           const n = d.items?.length || 0;
-          const when = new Date(d.createdAt || Date.now()).toLocaleDateString();
-          const word = d.verdict?.word || "—";
+          const label = dealLabel(d);
           return `<span class="hist-item">
-            <a class="hist-chip" href="/crosswalk?id=${encodeURIComponent(d.id)}">${escapeHtml(word)} · ${n} cards · ${when}</a>
+            <a class="hist-chip" href="/crosswalk?id=${encodeURIComponent(d.id)}" title="${escapeHtml(label)}">${escapeHtml(label)} · ${n}</a>
+            <button type="button" class="hist-rename" data-id="${escapeHtml(d.id)}" aria-label="Rename shoe" title="Rename">✎</button>
             <button type="button" class="hist-del" data-id="${escapeHtml(d.id)}" aria-label="Delete shoe" title="Delete">×</button>
           </span>`;
         })
@@ -172,6 +185,18 @@ function renderHistory() {
 }
 
 historyEl?.addEventListener("click", (e) => {
+  const rename = e.target.closest(".hist-rename");
+  if (rename) {
+    e.preventDefault();
+    const id = rename.getAttribute("data-id");
+    const next = prompt("Name this shoe (e.g. Alex · Hinge):");
+    if (next == null) return;
+    renameDeal(id, next);
+    renderHistory();
+    pushSync().catch(() => {});
+    track("shoe_rename");
+    return;
+  }
   const btn = e.target.closest(".hist-del");
   if (!btn) return;
   e.preventDefault();
@@ -182,6 +207,15 @@ historyEl?.addEventListener("click", (e) => {
   track("deal_delete");
   pushSync().catch(() => {});
 });
+
+function updateCapLabel() {
+  const el = document.getElementById("dealCap");
+  if (!el) return;
+  const st = dealCapStatus(12);
+  el.textContent = st.ok
+    ? `Free deals today · ${st.remaining} left`
+    : "Daily free-deal cap reached · try again tomorrow";
+}
 
 async function hashKey(str) {
   const buf = await crypto.subtle.digest(
@@ -637,6 +671,16 @@ async function evaluate() {
     return;
   }
 
+  const cap = dealCapStatus(12);
+  if (!cap.ok) {
+    showErr(
+      "Daily free-deal cap reached (12/day). Browse saved shoes or come back tomorrow."
+    );
+    track("deal_cap");
+    updateCapLabel();
+    return;
+  }
+
   goBtn.disabled = true;
   try {
     let traits;
@@ -717,19 +761,34 @@ reOcrBtn?.addEventListener("click", async () => {
   }
 });
 
-function finishDeal(items) {
+function finishDeal(items, opts = {}) {
+  if (!opts.bypassCap) {
+    const cap = consumeDealCap(12);
+    updateCapLabel();
+    if (!cap.ok) {
+      showErr(
+        "Daily free-deal cap reached (12/day). Come back tomorrow, or restore a saved shoe from history."
+      );
+      track("deal_cap");
+      return;
+    }
+  } else {
+    updateCapLabel();
+  }
   let running = 0;
   items.forEach((it) => (running += it.count));
   const tc = trueCount(running, items.length, items.length);
   const v = verdictFromTrue(tc, running, items.length);
+  const nameInput = document.getElementById("shoeName");
   const deal = {
-    id: uid(),
-    createdAt: Date.now(),
+    id: opts.reuseId || uid(),
+    createdAt: opts.createdAt || Date.now(),
+    name: (nameInput?.value || opts.name || "").trim().slice(0, 48),
     items,
     verdict: { word: v.word, running, trueCount: tc },
   };
   lastDeal = saveDeal(deal);
-  track("deal", { verdict: deal.verdict?.word, n: items.length });
+  track("deal", { verdict: deal.verdict?.word, n: items.length, ab: getAbBucket() });
   renderHistory();
   updateBandsLabel();
   dealAnimated(items, deal);
@@ -742,12 +801,36 @@ function finishDeal(items) {
     compareLink.href = `/compare?a=${encodeURIComponent(deal.id)}`;
   }
   wireShareButton(deal);
+  maybeInstallPrompt();
   pushSync().catch(() => {});
+}
+
+async function maybeInstallPrompt() {
+  const banner = document.getElementById("installBanner");
+  if (!banner || !shouldShowInstallPrompt()) return;
+  // Wait for beforeinstallprompt if possible
+  await new Promise((r) => setTimeout(r, 600));
+  if (!hasInstallPrompt()) return;
+  banner.style.display = "flex";
+  const go = document.getElementById("installGo");
+  const dismiss = document.getElementById("installDismiss");
+  go.onclick = async () => {
+    const res = await promptInstall();
+    markInstallPrompted();
+    banner.style.display = "none";
+    track("install_prompt", { outcome: res.outcome || "none" });
+  };
+  dismiss.onclick = () => {
+    markInstallPrompted();
+    banner.style.display = "none";
+    track("install_dismiss");
+  };
 }
 
 function wireShareButton(deal) {
   if (!shareBtn) return;
   shareBtn.style.display = "inline-block";
+  shareBtn.textContent = navigator.share ? "Share shoe" : "Copy share link";
   shareBtn.onclick = async () => {
     shareBtn.textContent = "Creating link…";
     try {
@@ -759,8 +842,18 @@ function wireShareButton(deal) {
       const url = server.url.startsWith("http")
         ? server.url
         : location.origin + server.url;
-      await navigator.clipboard.writeText(url);
-      shareBtn.textContent = "Short link copied";
+      const word = deal.verdict?.word || "Shoe";
+      const tc = Number(deal.verdict?.trueCount);
+      const tcText = Number.isFinite(tc)
+        ? `${tc >= 0 ? "+" : ""}${tc.toFixed(1)}`
+        : "";
+      const shared = await shareLink({
+        url,
+        title: `${word} · Profile Read`,
+        text: `${deal.name || "Dating profile shoe"}${tcText ? " — true count " + tcText : ""}`,
+      });
+      shareBtn.textContent =
+        shared.method === "native" ? "Shared" : "Link copied";
       const revoke = document.getElementById("revokeShareBtn");
       if (revoke) {
         revoke.style.display = "inline-block";
@@ -777,18 +870,17 @@ function wireShareButton(deal) {
           }
         };
       }
-      track("share_server");
+      track("share_server", { method: shared.method });
     } catch {
       const url = shareUrl(deal);
-      try {
-        await navigator.clipboard.writeText(url);
-      } catch {
-        prompt("Copy share link:", url);
-      }
-      shareBtn.textContent = "Fallback link copied";
+      await shareLink({ url, title: "Profile Read", text: "Shared shoe" });
+      shareBtn.textContent = "Fallback shared";
       track("share_fallback");
     }
-    setTimeout(() => (shareBtn.textContent = "Copy share link"), 1800);
+    setTimeout(
+      () => (shareBtn.textContent = navigator.share ? "Share shoe" : "Copy share link"),
+      1800
+    );
   };
 }
 
@@ -1046,7 +1138,12 @@ async function redealWithUpgrade(deal, idx) {
   try {
     const parsed = await scoreTraits(nextTraits);
     track("upgrade_redeal", { idx });
-    finishDeal(parsed);
+    finishDeal(parsed, {
+      bypassCap: true,
+      reuseId: deal.id,
+      createdAt: deal.createdAt,
+      name: deal.name,
+    });
   } catch (e) {
     showErr(e.message || "Could not re-deal upgrade");
   } finally {
@@ -1058,12 +1155,16 @@ async function runDemoDeal() {
   clearErr();
   const traits = DEMO_CROSSWALK.map((d) => d.trait);
   input.value = traits.join("\n");
+  const nameEl = document.getElementById("shoeName");
+  if (nameEl && !nameEl.value) nameEl.value = "Demo shoe";
   try {
-    // Prefer live score; fall back to bundled demo items offline.
     const parsed = await scoreTraits(traits);
-    finishDeal(parsed);
+    finishDeal(parsed, { bypassCap: true, name: "Demo shoe" });
   } catch {
-    finishDeal(DEMO_CROSSWALK.map((it) => normalizeItem(it)));
+    finishDeal(DEMO_CROSSWALK.map((it) => normalizeItem(it)), {
+      bypassCap: true,
+      name: "Demo shoe",
+    });
   }
   track("demo_deal");
 }
@@ -1130,11 +1231,60 @@ async function consumeSharedImage() {
 }
 consumeSharedImage();
 
+bindInstallCapture();
 refreshAccountUI();
 updateBandsLabel();
+updateCapLabel();
 renderHistory();
 hydrateBandsFromTelemetry().then(() => updateBandsLabel());
 pullSync().then(() => renderHistory()).catch(() => {});
+
+// A/B home headline + demo CTA
+(() => {
+  const bucket = getAbBucket();
+  const sub = document.querySelector("header .sub");
+  const demoCta = document.getElementById("abDemoCta");
+  if (bucket === "B" && sub) {
+    sub.textContent =
+      "Paste a bio or crop a screenshot — get HIT / STAND / BUST in under a minute. Start with the live demo if you’re curious.";
+  }
+  if (demoCta) {
+    demoCta.style.display = "inline-flex";
+    demoCta.textContent = bucket === "B" ? "Try the live demo →" : "Watch a sample shoe →";
+  }
+  track("ab_home", { bucket });
+})();
+
+// Partial re-score: edit one trait line without full OCR
+document.getElementById("rescoreBtn")?.addEventListener("click", async () => {
+  if (!lastDeal?.items?.length) {
+    showErr("Deal a shoe first, then edit traits and re-score.");
+    return;
+  }
+  const raw = prompt(
+    "Edit traits (one per line). Unchanged lines keep context; all will be re-scored.",
+    lastDeal.items.map((it) => it.trait).join("\n")
+  );
+  if (raw == null) return;
+  const traits = splitTraits(raw);
+  if (!traits.length) return;
+  statusEl.textContent = "Re-scoring edited shoe…";
+  statusEl.classList.add("show");
+  try {
+    const parsed = await scoreTraits(traits);
+    finishDeal(parsed, {
+      reuseId: lastDeal.id,
+      createdAt: lastDeal.createdAt,
+      name: lastDeal.name,
+      bypassCap: true,
+    });
+    track("rescore_edit");
+  } catch (e) {
+    showErr(e.message || "Re-score failed");
+  } finally {
+    statusEl.classList.remove("show");
+  }
+});
 
 fetch("/api/config")
   .then((r) => r.json())
@@ -1182,7 +1332,7 @@ if (params.get("redeal") === "1") {
     if (pending?.traits?.length) {
       input.value = pending.traits.join("\n");
       scoreTraits(pending.traits)
-        .then((parsed) => finishDeal(parsed))
+        .then((parsed) => finishDeal(parsed, { bypassCap: true }))
         .catch(() => showErr("Could not re-deal that upgrade."));
     }
   } catch {

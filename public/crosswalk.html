@@ -48,8 +48,9 @@
   .hist-chip{font-family:'Space Mono',monospace;font-size:11px;padding:6px 10px;border:1px solid var(--rule);background:var(--card);color:var(--ink);text-decoration:none}
   .hist-chip.on,.hist-chip:hover{border-color:var(--ink);background:var(--plum-soft);color:var(--plum)}
   .hist-item{display:inline-flex;align-items:stretch}
-  .hist-del{border:1px solid var(--rule);border-left:0;background:var(--card);color:var(--muted);padding:0 8px;cursor:pointer;font-size:16px;line-height:1}
+  .hist-del,.hist-rename{border:1px solid var(--rule);border-left:0;background:var(--card);color:var(--muted);padding:0 8px;cursor:pointer;font-size:14px;line-height:1}
   .hist-del:hover{background:var(--coral);color:#fff;border-color:var(--ink)}
+  .hist-rename:hover{background:var(--plum);color:#fff;border-color:var(--ink)}
   .xwalk-legend{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:0 0 18px}
   @media (max-width:640px){.xwalk-legend{grid-template-columns:1fr}}
   .xwalk-key{border:1.5px solid var(--ink);background:var(--card);padding:12px 14px}
@@ -122,9 +123,11 @@
   <div class="pager">
     <a class="nav-btn" href="/">← Back to shoe</a>
     <span class="page-meta" id="pageMeta">Page 2 of 2 · value grid</span>
+    <button type="button" class="nav-btn" id="renameShoeBtn">Rename</button>
+    <button type="button" class="nav-btn" id="exportPngBtn">Export PNG</button>
     <a class="nav-btn" id="compareBtn" href="/compare">Compare with this shoe →</a>
     <button type="button" class="nav-btn" id="revokeShareBtn" style="display:none">Revoke link</button>
-    <button type="button" class="nav-btn primary" id="shareBtn">Copy share link</button>
+    <button type="button" class="nav-btn primary" id="shareBtn">Share shoe</button>
   </div>
 
   <div id="history"></div>

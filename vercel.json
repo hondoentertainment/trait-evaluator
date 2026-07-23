@@ -6,6 +6,8 @@
     { "source": "/crosswalk", "destination": "/crosswalk.html" },
     { "source": "/compare", "destination": "/compare.html" },
     { "source": "/demo", "destination": "/demo.html" },
+    { "source": "/landing", "destination": "/landing.html" },
+    { "source": "/admin", "destination": "/admin.html" },
     { "source": "/share-target", "destination": "/share-target.html" },
     { "source": "/s/:id", "destination": "/api/go?id=:id" }
   ],
@@ -31,6 +33,7 @@
     "api/sync.js": { "maxDuration": 30 },
     "api/telemetry.js": { "maxDuration": 30 },
     "api/og.js": { "maxDuration": 15 },
-    "api/go.js": { "maxDuration": 15 }
+    "api/go.js": { "maxDuration": 15 },
+    "api/admin.js": { "maxDuration": 30 }
   }
 }

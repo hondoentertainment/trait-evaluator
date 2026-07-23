@@ -7,6 +7,8 @@ import {
   shareUrl,
   recentDeals,
   uid,
+  renameDeal,
+  dealLabel,
 } from "./store.js";
 import {
   getBands,
@@ -25,6 +27,8 @@ import {
   pushSync,
 } from "./auth.js";
 import { track } from "./telemetry.js";
+import { shareLink } from "./native-share.js";
+import { exportCrosswalkPng } from "./export-png.js";
 
 const DEMO = [
   {
@@ -137,9 +141,10 @@ function renderHistory(activeId) {
         .map((d) => {
           const n = d.items?.length || 0;
           const cls = d.id === activeId ? "hist-chip on" : "hist-chip";
-          const word = d.verdict?.word || (d.demo ? "DEMO" : "—");
+          const label = dealLabel(d);
           return `<span class="hist-item">
-            <a class="${cls}" href="/crosswalk?id=${encodeURIComponent(d.id)}">${escapeHtml(word)} · ${n}</a>
+            <a class="${cls}" href="/crosswalk?id=${encodeURIComponent(d.id)}">${escapeHtml(label)} · ${n}</a>
+            <button type="button" class="hist-rename" data-id="${escapeHtml(d.id)}" aria-label="Rename" title="Rename">✎</button>
             <button type="button" class="hist-del" data-id="${escapeHtml(d.id)}" aria-label="Delete shoe" title="Delete">×</button>
           </span>`;
         })
@@ -148,6 +153,18 @@ function renderHistory(activeId) {
 }
 
 historyEl?.addEventListener("click", async (e) => {
+  const rename = e.target.closest(".hist-rename");
+  if (rename) {
+    e.preventDefault();
+    const id = rename.getAttribute("data-id");
+    const next = prompt("Name this shoe (e.g. Alex · Hinge):");
+    if (next == null) return;
+    renameDeal(id, next);
+    track("shoe_rename");
+    pushSync().catch(() => {});
+    location.href = `/crosswalk?id=${encodeURIComponent(id)}`;
+    return;
+  }
   const btn = e.target.closest(".hist-del");
   if (!btn) return;
   e.preventDefault();
@@ -322,7 +339,37 @@ function renderCrosswalk(deal) {
     }
   }
 
+  const exportBtn = document.getElementById("exportPngBtn");
+  if (exportBtn) {
+    exportBtn.onclick = async () => {
+      exportBtn.textContent = "Rendering…";
+      try {
+        await exportCrosswalkPng(deal);
+        track("export_png");
+        exportBtn.textContent = "PNG saved";
+      } catch {
+        exportBtn.textContent = "Export failed";
+      }
+      setTimeout(() => (exportBtn.textContent = "Export PNG"), 1600);
+    };
+  }
+
+  const renameBtn = document.getElementById("renameShoeBtn");
+  if (renameBtn) {
+    renameBtn.onclick = () => {
+      const next = prompt("Name this shoe (e.g. Alex · Hinge):", deal.name || "");
+      if (next == null) return;
+      renameDeal(deal.id, next);
+      deal.name = next.trim().slice(0, 48);
+      track("shoe_rename");
+      pushSync().catch(() => {});
+      renderHistory(deal.id);
+      renderCrosswalk(deal);
+    };
+  }
+
   if (shareBtn) {
+    shareBtn.textContent = navigator.share ? "Share shoe" : "Copy share link";
     shareBtn.onclick = async () => {
       shareBtn.textContent = "Creating link…";
       try {
@@ -334,8 +381,13 @@ function renderCrosswalk(deal) {
         const url = server.url.startsWith("http")
           ? server.url
           : location.origin + server.url;
-        await navigator.clipboard.writeText(url);
-        shareBtn.textContent = "Short link copied";
+        const word = deal.verdict?.word || "Shoe";
+        await shareLink({
+          url,
+          title: `${word} · Profile Read`,
+          text: deal.name || "Shared dating-profile shoe",
+        });
+        shareBtn.textContent = navigator.share ? "Shared" : "Link copied";
         if (revokeBtn) revokeBtn.style.display = "inline-block";
         if (compareBtn) {
           compareBtn.href = `/compare?asid=${encodeURIComponent(server.id)}`;
@@ -343,14 +395,14 @@ function renderCrosswalk(deal) {
         track("share_server");
       } catch {
         const url = shareUrl(deal);
-        try {
-          await navigator.clipboard.writeText(url);
-        } catch {
-          prompt("Copy share link:", url);
-        }
-        shareBtn.textContent = "Fallback link copied";
+        await shareLink({ url, title: "Profile Read", text: "Shared shoe" });
+        shareBtn.textContent = "Fallback shared";
       }
-      setTimeout(() => (shareBtn.textContent = "Copy share link"), 1800);
+      setTimeout(
+        () =>
+          (shareBtn.textContent = navigator.share ? "Share shoe" : "Copy share link"),
+        1800
+      );
     };
   }
 

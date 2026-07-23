@@ -76,8 +76,19 @@
   .hist-chip{font-family:'Space Mono',monospace;font-size:11px;padding:6px 10px;border:1px solid var(--rule);background:var(--card);color:var(--ink);text-decoration:none}
   .hist-chip:hover,.hist-chip.on{border-color:var(--ink);background:var(--plum-soft);color:var(--plum)}
   .hist-item{display:inline-flex;align-items:stretch}
-  .hist-del{border:1px solid var(--rule);border-left:0;background:var(--card);color:var(--muted);padding:0 8px;cursor:pointer;font-size:16px;line-height:1}
+  .hist-del,.hist-rename{border:1px solid var(--rule);border-left:0;background:var(--card);color:var(--muted);padding:0 8px;cursor:pointer;font-size:14px;line-height:1}
   .hist-del:hover{background:var(--coral);color:#fff;border-color:var(--ink)}
+  .hist-rename:hover{background:var(--plum);color:#fff;border-color:var(--ink)}
+  .install-banner{
+    display:none;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;
+    margin:12px 0;padding:12px 14px;border:1.5px solid var(--ink);background:var(--ink);color:var(--card);
+  }
+  .install-banner button{border:1px solid var(--card);background:var(--lime);color:var(--ink);font-weight:700;padding:8px 12px;cursor:pointer}
+  .ab-demo{
+    display:none;margin:0 0 16px;border:1.5px solid var(--ink);background:var(--lime);color:var(--ink);
+    padding:12px 16px;font-weight:700;text-decoration:none;box-shadow:4px 4px 0 var(--ink);width:fit-content;
+  }
+  .cap-live{font-family:'Space Mono',monospace;font-size:11px;color:var(--muted);margin:6px 0 0}
   .composer{background:var(--card);border:1.5px solid var(--ink);border-radius:2px;padding:18px;margin:24px 0;box-shadow:6px 6px 0 var(--plum)}
   .composer.dragover{outline:2px dashed var(--plum);outline-offset:4px;background:#fff8ef}
   label{font-family:'Space Mono',monospace;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);display:block;margin-bottom:8px}
@@ -195,7 +206,16 @@
     <div class="eyebrow">Dating profile decoder</div>
     <div class="brand">Profile <em>Read</em></div>
     <p class="sub">Two pages, one shoe: deal traits like cards, then read the full value crosswalk. Save, share, and tune the count.</p>
+    <a class="ab-demo" id="abDemoCta" href="/?demo=1#deal">Try the live demo →</a>
   </header>
+
+  <div class="install-banner" id="installBanner">
+    <span>Install Profile Read for one-tap shares from your camera roll.</span>
+    <span style="display:flex;gap:8px">
+      <button type="button" id="installGo">Install</button>
+      <button type="button" id="installDismiss" style="background:transparent;color:var(--card)">Not now</button>
+    </span>
+  </div>
 
   <div class="showcase" aria-label="Pages">
     <a class="show-panel" href="#deal" id="showShoe">
@@ -249,8 +269,11 @@
     <h1>What is that trait <em>actually</em> telling us?</h1>
     <p class="sub">Paste text or crop a screenshot. We’ll extract traits for you to edit, then deal the shoe.</p>
     <div class="bands-live" id="bandsLive">Hi-Lo bands · +1 ≥ 70 · −1 ≤ 35</div>
+    <div class="cap-live" id="dealCap">Free deals today · —</div>
 
     <div class="composer" id="composer">
+      <label for="shoeName">Shoe name <span style="font-weight:400;letter-spacing:.08em">· optional</span></label>
+      <input id="shoeName" type="text" maxlength="48" placeholder="Alex · Hinge" style="width:100%;margin-bottom:12px;padding:12px 14px;border:1.5px solid var(--ink);background:var(--card);font:inherit">
       <label for="input">Profile text <span style="font-weight:400;letter-spacing:.08em">· or screenshot</span></label>
       <textarea id="input" placeholder="Loves hiking, 6'2&quot;, entrepreneur, fluent in sarcasm, dog mom..."></textarea>
       <div class="uploadzone">
@@ -266,6 +289,7 @@
       <div class="examples" id="examples"></div>
       <div class="row">
         <span class="hint">One trait per line, or comma-separated.</span>
+        <button type="button" id="rescoreBtn" style="background:var(--paper)">Edit &amp; re-score</button>
         <button id="go" type="button">Read it →</button>
       </div>
     </div>

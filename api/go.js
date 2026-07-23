@@ -42,12 +42,12 @@ export default async function handler(req, res) {
     return res.end();
   }
 
-  const dest = `/crosswalk?sid=${encodeURIComponent(id)}`;
+  // Humans land on verdict-first page (less bounce); bots get OG HTML.
+  const humanDest = `/landing?sid=${encodeURIComponent(id)}`;
   const ua = req.headers["user-agent"] || "";
 
-  // Humans: fast redirect. Crawlers: HTML with dynamic OG.
   if (!isBot(ua)) {
-    res.writeHead(302, { Location: dest });
+    res.writeHead(302, { Location: humanDest });
     return res.end();
   }
 
@@ -97,10 +97,10 @@ export default async function handler(req, res) {
 <meta name="twitter:title" content="${escapeHtml(title)}">
 <meta name="twitter:description" content="${escapeHtml(description)}">
 <meta name="twitter:image" content="${escapeHtml(absImage)}">
-<meta http-equiv="refresh" content="0;url=${escapeHtml(dest)}">
+<meta http-equiv="refresh" content="0;url=${escapeHtml(humanDest)}">
 </head>
 <body>
-<p>${statusNote === "expired" ? "Share expired." : "Opening shoe…"} <a href="${escapeHtml(dest)}">Continue</a></p>
+<p>${statusNote === "expired" ? "Share expired." : "Opening shoe…"} <a href="${escapeHtml(humanDest)}">Continue</a></p>
 </body>
 </html>`;
 

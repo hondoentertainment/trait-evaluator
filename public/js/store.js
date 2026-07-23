@@ -5,6 +5,78 @@ const FEEDBACK_KEY = "profileRead.feedback.v1";
 const TRAIT_FB_KEY = "profileRead.traitFeedback.v1";
 const CLIENT_RATE_KEY = "profileRead.rate.v1";
 const EVAL_CACHE_KEY = "profileRead.evalCache.v1";
+const DEAL_CAP_KEY = "profileRead.dealCap.v1";
+const AB_KEY = "profileRead.ab.v1";
+const INSTALL_KEY = "profileRead.installPrompted.v1";
+
+/** Soft daily free-deal cap (client). Default 12 deals/day. */
+export function dealCapStatus(maxPerDay = 12) {
+  const day = new Date().toISOString().slice(0, 10);
+  let row = { day, count: 0 };
+  try {
+    row = JSON.parse(localStorage.getItem(DEAL_CAP_KEY) || "null") || row;
+  } catch {}
+  if (row.day !== day) row = { day, count: 0 };
+  const remaining = Math.max(0, maxPerDay - (row.count || 0));
+  return {
+    ok: remaining > 0,
+    remaining,
+    used: row.count || 0,
+    max: maxPerDay,
+    day,
+  };
+}
+
+export function consumeDealCap(maxPerDay = 12) {
+  const st = dealCapStatus(maxPerDay);
+  if (!st.ok) return st;
+  const row = { day: st.day, count: st.used + 1 };
+  localStorage.setItem(DEAL_CAP_KEY, JSON.stringify(row));
+  return dealCapStatus(maxPerDay);
+}
+
+export function renameDeal(id, name) {
+  const deals = loadDeals();
+  if (!deals[id] || deals[id].deleted) return null;
+  deals[id].name = String(name || "")
+    .trim()
+    .slice(0, 48);
+  localStorage.setItem(DEALS_KEY, JSON.stringify(deals));
+  return deals[id];
+}
+
+export function dealLabel(d) {
+  if (d?.name) return d.name;
+  const word = d?.verdict?.word || "Shoe";
+  const when = new Date(d?.createdAt || Date.now()).toLocaleDateString();
+  return `${word} · ${when}`;
+}
+
+export function getAbBucket() {
+  try {
+    let v = localStorage.getItem(AB_KEY);
+    if (v === "A" || v === "B") return v;
+    v = Math.random() < 0.5 ? "A" : "B";
+    localStorage.setItem(AB_KEY, v);
+    return v;
+  } catch {
+    return "A";
+  }
+}
+
+export function shouldShowInstallPrompt() {
+  try {
+    return localStorage.getItem(INSTALL_KEY) !== "1";
+  } catch {
+    return false;
+  }
+}
+
+export function markInstallPrompted() {
+  try {
+    localStorage.setItem(INSTALL_KEY, "1");
+  } catch {}
+}
 
 export function uid() {
   return (
